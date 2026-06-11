@@ -31,6 +31,7 @@ public:
         float flavorTime_ms   = 1.5f;   // comb delay
         float drive_dB        = 4.0f;
         float sparkle_pct     = 50.0f;  // 12 kHz peak gain, 0..+8 dB
+        bool  sweepEnabled    = true;   // false = fixed tone (SPEED off / TONE button)
     };
 
     void prepare(double sampleRate, int /*maxBlockSize*/)
@@ -44,6 +45,8 @@ public:
         smoothCoef_ = 1.0f - std::exp(-1.0f / (0.010f * fs_));
         ampAttCoef_ = 1.0f - std::exp(-1.0f / (0.003f * fs_));
         ampRelCoef_ = 1.0f - std::exp(-1.0f / (0.050f * fs_));
+        levelDecay_ = std::exp(-1.0f / (0.080f * fs_));
+        levelEnv_ = 0.0f;
 
         oscPhase_ = 0.0f;
         lfo1Phase_ = 0.5f;
@@ -62,7 +65,11 @@ public:
         flavorS_ = p_.flavor_pct / 100.0f;
         delaySampS_ = p_.flavorTime_ms * 0.001f * fs_;
         volS_ = dB2lin(p_.volume_dB);
+        sweepS_ = p_.sweepEnabled ? 1.0f : 0.0f;
     }
+
+    // Post-volume peak with ~80 ms decay, for the panel LED.
+    float outputLevel() const { return levelEnv_; }
 
     void setParameters(const Params& p)
     {
@@ -94,6 +101,7 @@ public:
         const float envDepth = 8.64f;
 
         const float pitchTarget = p_.pitch01;
+        const float sweepTarget = p_.sweepEnabled ? 1.0f : 0.0f;
         const float amountTarget = p_.amount_pct / 100.0f;
         const float flavorTarget = p_.flavor_pct / 100.0f;
         const float delayTarget = std::min(p_.flavorTime_ms * 0.001f * fs_,
@@ -113,6 +121,7 @@ public:
         for (int i = 0; i < numFrames; ++i)
         {
             pitch01S_ += smoothCoef_ * (pitchTarget - pitch01S_);
+            sweepS_ += smoothCoef_ * (sweepTarget - sweepS_);
             amountS_ += smoothCoef_ * (amountTarget - amountS_);
             flavorS_ += smoothCoef_ * (flavorTarget - flavorS_);
             delaySampS_ += smoothCoef_ * (delayTarget - delaySampS_);
@@ -126,7 +135,7 @@ public:
             lfo1Phase_ = wrap(lfo1Phase_ + lfo1Inc);
             lfo2Phase_ = wrap(lfo2Phase_ + lfo2Inc);
 
-            const float lfo1Depth = 7.2f + 2.4f * pitch01S_;
+            const float lfo1Depth = (7.2f + 2.4f * pitch01S_) * sweepS_;
             const float mod_st = amountS_ * (lfo1Depth * l1
                                              + lfo2Depth * l2
                                              + envDepth * pitchEnv_);
@@ -158,6 +167,9 @@ public:
             y = peak_.process(y);
             y = hpf_.process(y);
             y *= volS_;
+
+            const float ay = std::fabs(y);
+            levelEnv_ = ay > levelEnv_ ? ay : levelEnv_ * levelDecay_;
 
             for (int ch = 0; ch < numChannels; ++ch)
                 buffers[ch][i] += y;
@@ -258,7 +270,8 @@ private:
 
     float smoothCoef_ = 0.0f, ampAttCoef_ = 0.0f, ampRelCoef_ = 0.0f;
     float pitch01S_ = 0.5f, amountS_ = 1.0f, flavorS_ = 0.75f;
-    float delaySampS_ = 64.0f, volS_ = 0.5f;
+    float delaySampS_ = 64.0f, volS_ = 0.5f, sweepS_ = 1.0f;
+    float levelDecay_ = 0.0f, levelEnv_ = 0.0f;
 
     Biquad peak_, hpf_;
 };

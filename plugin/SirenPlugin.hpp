@@ -23,6 +23,7 @@ protected:
 private:
     siren::SirenEngine engine_;
     float params_[siren::kNumControlParams] = {};
+    float outLevel_ = 0.0f;
     bool  requiresUpdate_ = true;
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SirenPlugin)
 };
