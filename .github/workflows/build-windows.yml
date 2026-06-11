@@ -1,0 +1,38 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSIREN_BUILD_UI=ON -DSIREN_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Siren-vst3-windows-x64-${{ github.sha }}
+          path: build/bin/Siren.vst3/
+          if-no-files-found: error
+
+      - name: Upload LV2
+        uses: actions/upload-artifact@v4
+        with:
+          name: Siren-lv2-windows-x64-${{ github.sha }}
+          path: build/bin/Siren.lv2/
+          if-no-files-found: error
