@@ -55,16 +55,31 @@ jobs:
       - name: ccache stats
         run: ccache -s
 
+      - name: Check runtime DLL deps (must be system-only)
+        run: |
+          objdump -p build/bin/Siren.vst3/Contents/x86_64-win/Siren.vst3 | grep "DLL Name"
+          if objdump -p build/bin/Siren.vst3/Contents/x86_64-win/Siren.vst3 | grep -iE "libgcc|libstdc|winpthread"; then
+            echo "::error::plugin depends on MinGW runtime DLLs"; exit 1
+          fi
+
+      # Stage the bundle FOLDERS so the extracted zip is drop-in installable
+      # (Siren.vst3/Contents/x86_64-win/Siren.vst3)
+      - name: Stage bundles
+        run: |
+          mkdir -p dist-vst3 dist-lv2
+          cp -r build/bin/Siren.vst3 dist-vst3/
+          cp -r build/bin/Siren.lv2 dist-lv2/
+
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
           name: Siren-vst3-windows-x64-${{ github.sha }}
-          path: build/bin/Siren.vst3/
+          path: dist-vst3/
           if-no-files-found: error
 
       - name: Upload LV2
         uses: actions/upload-artifact@v4
         with:
           name: Siren-lv2-windows-x64-${{ github.sha }}
-          path: build/bin/Siren.lv2/
+          path: dist-lv2/
           if-no-files-found: error

@@ -34,6 +34,16 @@ target_include_directories(Siren PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin
     ${CMAKE_CURRENT_SOURCE_DIR}/dsp)
 
+# MinGW builds must not depend on libgcc/libstdc++/winpthread DLLs — hosts on
+# machines without MSYS2 would silently fail to load the plugin.
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    foreach(t Siren-vst3 Siren-lv2 Siren-jack)
+        if(TARGET ${t})
+            target_link_options(${t} PRIVATE -static -static-libgcc -static-libstdc++)
+        endif()
+    endforeach()
+endif()
+
 if(SIREN_BUILD_TESTS)
     enable_testing()
     add_subdirectory(test)
