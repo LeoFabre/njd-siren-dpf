@@ -82,6 +82,12 @@ public:
     // Adds the mono siren to every channel; channel content is preserved.
     void process(float** buffers, int numChannels, int numFrames)
     {
+        // Hosts may race the first audio callback against activate() (seen with
+        // the RtAudio standalone): without prepare() the comb buffer is empty
+        // and every coefficient is zero, so just stay silent.
+        if (combLen_ == 0 || fs_ <= 0.0f)
+            return;
+
         const bool gate = p_.gate;
         if (gate && !prevGate_)
         {

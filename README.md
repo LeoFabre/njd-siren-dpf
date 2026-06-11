@@ -1,6 +1,8 @@
 # njd-siren-dpf
 
-NJD-style dub siren generator (DPF, headless VST3 + LV2) for the nexus-preamp rig.
+NJD-style dub siren generator (DPF, VST3 + LV2) for the nexus-preamp rig.
+
+![Faceplate UI](docs/faceplate.png)
 
 DSP recipe reverse-engineered from the Ableton Wavetable rack shown in
 « le son de sirène analo avec un wavetable !!! » (youtube zmCO6T_ksno):
