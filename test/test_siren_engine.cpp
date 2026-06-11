@@ -107,6 +107,47 @@ int main()
         CHECK(rmsComb < rmsDry * 0.12f, "flavor comb cancels harmonics at 1/period delay");
     }
 
+    // 5. SPEED -> OFF while playing: capacitor discharge. The pitch CV decays
+    //    slowly, the oscillator slides below the 100 Hz high-pass and the
+    //    output dies out — instead of snapping to the fixed tone.
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.gate = true;
+        p.discharge_s = 0.4f;  // shortened so the test stays fast
+        eng.setParameters(p);
+        renderRms(eng, 200, 0);  // ~270 ms of normal sweep
+
+        p.sweepEnabled = false;
+        p.speedOff = true;
+        eng.setParameters(p);
+
+        // Right after the switch the tone is still sounding (slow discharge)…
+        const float rmsEarly = renderRms(eng, 40, 0);    // first ~50 ms
+        CHECK(rmsEarly > 0.05f, "speed OFF -> tone still sounding right after");
+
+        // …after ~7 time constants the CV is drained: silence while gate held.
+        renderRms(eng, (int)(7 * 0.4f * kFs / kBlock), 0);
+        const float rmsLate = renderRms(eng, 80, 0);
+        std::printf("      discharge: early rms=%.4f late rms=%.6f\n", rmsEarly, rmsLate);
+        CHECK(rmsLate < 2e-3f, "speed OFF -> discharges to silence");
+    }
+
+    // 6. Fresh trigger with SPEED already OFF: normal fixed tone (the caps
+    //    only hold a charge while playing).
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.gate = true;
+        p.sweepEnabled = false;
+        p.speedOff = true;
+        eng.setParameters(p);
+        const float rms = renderRms(eng, 200, 50);
+        CHECK(rms > 0.05f, "fresh trigger with speed OFF -> fixed tone plays");
+    }
+
     std::printf(failures == 0 ? "ALL OK\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
 }

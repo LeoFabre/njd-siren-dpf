@@ -32,6 +32,8 @@ public:
         float drive_dB        = 4.0f;
         float sparkle_pct     = 50.0f;  // 12 kHz peak gain, 0..+8 dB
         bool  sweepEnabled    = true;   // false = fixed tone (SPEED off / TONE button)
+        bool  speedOff        = false;  // SPEED selector on OFF (vs TONE button)
+        float discharge_s     = 2.0f;   // LFO capacitor discharge time constant
     };
 
     void prepare(double sampleRate, int /*maxBlockSize*/)
@@ -56,6 +58,10 @@ public:
         ampEnv_ = 0.0f;
         pitchEnv_ = 0.0f;
         prevGate_ = false;
+        pitchState_ = PitchState::Normal;
+        prevSpeedOff_ = false;
+        dischExp_ = 0.0f;
+        lastExp_ = 0.0f;
 
         peak_.reset();
         hpf_.reset();
@@ -95,8 +101,32 @@ public:
         {
             lfo1Phase_ = 0.5f;   // 180° offset: start on the falling edge
             pitchEnv_ = 0.0f;
+            pitchState_ = PitchState::Normal;   // a fresh trigger recharges the caps
         }
         prevGate_ = gate;
+
+        // SPEED -> OFF while playing: the real NJD's LFO is transistor/cap
+        // based — flipping the selector to OFF stops charging the caps, which
+        // then discharge slowly, dragging the oscillator CV (and so its
+        // frequency) down until the tone falls below the 100 Hz high-pass and
+        // phase-cancels into silence. We freeze the LFO and decay the captured
+        // pitch exponent exponentially, exactly like an RC discharge feeding
+        // an expo converter.
+        if (p_.speedOff && !prevSpeedOff_ && gate && ampEnv_ > 0.01f)
+        {
+            pitchState_ = PitchState::Discharge;
+            dischExp_ = lastExp_;
+        }
+        else if (!p_.speedOff && pitchState_ == PitchState::Discharge)
+        {
+            pitchState_ = PitchState::Recharge; // speed back on: quick wind-up
+        }
+        prevSpeedOff_ = p_.speedOff;
+
+        const float dischCoef = 1.0f - std::exp(-1.0f /
+            (std::max(0.05f, p_.discharge_s) * fs_));
+        const float rechCoef = 1.0f - std::exp(-1.0f / (0.200f * fs_));
+        constexpr float kFloorExp = -7.0f;  // 60 * 2^-7 ≈ 0.47 Hz: fully drained
 
         const float lfo1Inc = p_.lfo1Rate_Hz / fs_;
         const float lfo2Inc = p_.lfo2Rate_Hz / fs_;
@@ -140,8 +170,11 @@ public:
 
             const float l1 = lfoEval(p_.lfo1Wave, lfo1Phase_, shape1);
             const float l2 = lfoEval(p_.lfo2Wave, lfo2Phase_, 0.0f);
-            lfo1Phase_ = wrap(lfo1Phase_ + lfo1Inc);
-            lfo2Phase_ = wrap(lfo2Phase_ + lfo2Inc);
+            if (pitchState_ != PitchState::Discharge)  // discharging = LFO stopped
+            {
+                lfo1Phase_ = wrap(lfo1Phase_ + lfo1Inc);
+                lfo2Phase_ = wrap(lfo2Phase_ + lfo2Inc);
+            }
 
             const float lfo1Depth = (7.2f + 2.4f * pitch01S_) * sweepS_;
             const float mod_st = amountS_ * (lfo1Depth * l1
@@ -149,7 +182,26 @@ public:
                                              + envDepth * pitchEnv_);
 
             // f = 60 * 25^pitch01 * 2^(mod/12), folded into a single exp2
-            float f = 60.0f * std::exp2(pitch01S_ * 4.6438562f + mod_st * (1.0f / 12.0f));
+            const float liveExp = pitch01S_ * 4.6438562f + mod_st * (1.0f / 12.0f);
+            float e;
+            switch (pitchState_)
+            {
+            case PitchState::Discharge:
+                dischExp_ += dischCoef * (kFloorExp - dischExp_);
+                e = dischExp_;
+                break;
+            case PitchState::Recharge:
+                dischExp_ += rechCoef * (liveExp - dischExp_);
+                e = dischExp_;
+                if (std::fabs(liveExp - dischExp_) < 0.02f)
+                    pitchState_ = PitchState::Normal;
+                break;
+            default:
+                e = liveExp;
+                break;
+            }
+            lastExp_ = e;
+            float f = 60.0f * std::exp2(e);
             f = std::min(f, nyqLimit);
 
             const float inc = f / fs_;
@@ -269,12 +321,18 @@ private:
     int combLen_ = 0;
     int combWrite_ = 0;
 
+    enum class PitchState { Normal, Discharge, Recharge };
+
     float oscPhase_ = 0.0f;
     float lfo1Phase_ = 0.5f;
     float lfo2Phase_ = 0.0f;
     float ampEnv_ = 0.0f;
     float pitchEnv_ = 0.0f;
     bool  prevGate_ = false;
+    PitchState pitchState_ = PitchState::Normal;
+    bool  prevSpeedOff_ = false;
+    float dischExp_ = 0.0f;
+    float lastExp_ = 0.0f;
 
     float smoothCoef_ = 0.0f, ampAttCoef_ = 0.0f, ampRelCoef_ = 0.0f;
     float pitch01S_ = 0.5f, amountS_ = 1.0f, flavorS_ = 0.75f;

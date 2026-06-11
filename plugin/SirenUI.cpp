@@ -95,7 +95,7 @@ void SirenUI::onNanoDisplay()
     drawRotarySwitch(kToneX, kToneY, (int) values_[idx(Param::tone)], 3,
                      kPosTone, 0x2e6b34, "TONE");
     drawRotarySwitch(kModeX, kModeY, (int) values_[idx(Param::mode)], 4,
-                     kPosMode, 0xd6c93e, "MODE");
+                     kPosMode, 0xd6c93e, "MODE", /*waveGlyphs=*/true);
     drawRotarySwitch(kSpeedX, kSpeedY, (int) values_[idx(Param::speed)], 4,
                      kPosSpeed, 0xc43028, "SPEED");
 
@@ -116,11 +116,12 @@ void SirenUI::onNanoDisplay()
 }
 
 void SirenUI::drawRotarySwitch(float cx, float cy, int pos, int numPos,
-                               const char* const* labels, uint capColor, const char* name)
+                               const char* const* labels, uint capColor, const char* name,
+                               bool waveGlyphs)
 {
     pos = std::clamp(pos, 0, numPos - 1);
 
-    // Position ticks and numerals.
+    // Position ticks and numerals (or waveform glyphs for the MODE switch).
     fontSize(15.f);
     textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
     for (int i = 0; i < numPos; ++i)
@@ -134,8 +135,15 @@ void SirenUI::drawRotarySwitch(float cx, float cy, int pos, int numPos,
         strokeWidth(2.f);
         stroke();
         strokeWidth(1.f);
-        fillColor(rgb(0x2a2a26));
-        text(cx + c * (kKnobR + 27.f), cy + s * (kKnobR + 27.f), labels[i], nullptr);
+        if (waveGlyphs)
+        {
+            drawWaveGlyph(cx + c * (kKnobR + 29.f), cy + s * (kKnobR + 29.f), i);
+        }
+        else
+        {
+            fillColor(rgb(0x2a2a26));
+            text(cx + c * (kKnobR + 27.f), cy + s * (kKnobR + 27.f), labels[i], nullptr);
+        }
     }
 
     // Black knob body with colored cap and white pointer at the detent.
@@ -169,6 +177,50 @@ void SirenUI::drawRotarySwitch(float cx, float cy, int pos, int numPos,
     textAlign(ALIGN_CENTER | ALIGN_BASELINE);
     fillColor(rgb(0x2a2a26));
     text(cx, cy + kKnobR + 45.f, name, nullptr);
+}
+
+// Small waveform icons for the MODE positions, matching kModes in the plugin:
+// 1 tri (wail), 2 saw (falling sweep), 3 square (two-tone), 4 clipped tri.
+void SirenUI::drawWaveGlyph(float cx, float cy, int mode)
+{
+    const float w = 22.f, h = 12.f;
+    const float x0 = cx - w * 0.5f, x1 = cx + w * 0.5f;
+    const float yT = cy - h * 0.5f, yB = cy + h * 0.5f;
+
+    beginPath();
+    switch (mode)
+    {
+    case 0: // triangle: \/\ rise-fall
+        moveTo(x0, cy);
+        lineTo(x0 + w * 0.25f, yT);
+        lineTo(x0 + w * 0.75f, yB);
+        lineTo(x1, cy);
+        break;
+    case 1: // saw: two falling ramps
+        moveTo(x0, yT);
+        lineTo(x0 + w * 0.5f, yB);
+        lineTo(x0 + w * 0.5f, yT);
+        lineTo(x1, yB);
+        break;
+    case 2: // square: two-tone
+        moveTo(x0, yT);
+        lineTo(x0 + w * 0.5f, yT);
+        lineTo(x0 + w * 0.5f, yB);
+        lineTo(x1, yB);
+        lineTo(x1, yT);
+        break;
+    default: // clipped tri: trapezoid (hard wail)
+        moveTo(x0, yB);
+        lineTo(x0 + w * 0.22f, yT);
+        lineTo(x0 + w * 0.62f, yT);
+        lineTo(x0 + w * 0.84f, yB);
+        lineTo(x1, yB);
+        break;
+    }
+    strokeColor(rgb(0x2a2a26));
+    strokeWidth(2.f);
+    stroke();
+    strokeWidth(1.f);
 }
 
 void SirenUI::drawVolumeKnob(float cx, float cy, float norm)
@@ -341,11 +393,10 @@ bool SirenUI::onMouse(const MouseEvent& ev)
 
         if (i == idx(Param::tone) || i == idx(Param::mode) || i == idx(Param::speed))
         {
-            const int n = paramInfo(static_cast<Param>(i)).numChoices;
-            const float nv = (float)(((int) values_[i] + 1) % n);
-            values_[i] = nv;
-            setParameterValue((uint32_t) i, nv);
-            repaint();
+            // Detented knob: drag up/down to step through the positions.
+            draggingSel_ = i;
+            dragStartY_ = ev.pos.getY();
+            dragStartPos_ = (int) values_[i];
             return true;
         }
         if (i == idx(Param::volume))
@@ -374,6 +425,7 @@ bool SirenUI::onMouse(const MouseEvent& ev)
     }
 
     draggingVol_ = false;
+    draggingSel_ = -1;
     if (pressedBtn_ >= 0)
     {
         values_[pressedBtn_] = 0.f;
@@ -386,6 +438,21 @@ bool SirenUI::onMouse(const MouseEvent& ev)
 
 bool SirenUI::onMotion(const MotionEvent& ev)
 {
+    if (draggingSel_ >= 0)
+    {
+        // One detent per 30 px, dragging up increases.
+        const int n = paramInfo(static_cast<Param>(draggingSel_)).numChoices;
+        const int steps = (int) std::lround((dragStartY_ - ev.pos.getY()) / 30.f);
+        const int pos = std::clamp(dragStartPos_ + steps, 0, n - 1);
+        if (pos != (int) values_[draggingSel_])
+        {
+            values_[draggingSel_] = (float) pos;
+            setParameterValue((uint32_t) draggingSel_, (float) pos);
+            repaint();
+        }
+        return true;
+    }
+
     if (!draggingVol_)
         return false;
 

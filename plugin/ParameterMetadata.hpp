@@ -23,12 +23,13 @@ enum class Param : uint32_t {
     flavorTime,
     drive,
     sparkle,
+    discharge,   // SPEED->OFF capacitor discharge time (s)
     // Output params
     outLevel,    // post-volume peak, drives the panel LED
 };
 
 constexpr int kNumPanelParams   = 8;
-constexpr int kNumControlParams = 17;
+constexpr int kNumControlParams = 18;
 constexpr int kNumOutputParams  = 1;
 
 struct ParamInfo {
@@ -86,7 +87,9 @@ static constexpr ParamInfo kParams[kNumControlParams + kNumOutputParams] = {
     { "drive",      "Drive",        0.0f,   12.0f,    4.0f, false, false, false, false, 0, nullptr },
     // 16 sparkle
     { "sparkle",    "Sparkle",      0.0f,  100.0f,   50.0f, false, false, false, false, 0, nullptr },
-    // 17 outLevel (output)
+    // 17 discharge
+    { "discharge",  "Discharge",    0.2f,    8.0f,    2.0f, false, false, false, true,  0, nullptr },
+    // 18 outLevel (output)
     { "outLevel",   "Out Level",    0.0f,    2.0f,    0.0f, false, false, true,  false, 0, nullptr },
 };
 

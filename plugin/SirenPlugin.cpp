@@ -123,6 +123,8 @@ void SirenPlugin::run(const float** inputs, float** outputs, uint32_t frames)
             .drive_dB       = params_[idx(Param::drive)],
             .sparkle_pct    = params_[idx(Param::sparkle)],
             .sweepEnabled   = !toneB && speedIdx < 3,
+            .speedOff       = speedIdx == 3,
+            .discharge_s    = params_[idx(Param::discharge)],
         };
         engine_.setParameters(p);
         requiresUpdate_ = false;

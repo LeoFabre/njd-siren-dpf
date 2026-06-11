@@ -22,7 +22,9 @@ private:
     static constexpr float kHeight = 620.f;
 
     void drawRotarySwitch(float cx, float cy, int pos, int numPos,
-                          const char* const* labels, uint capColor, const char* name);
+                          const char* const* labels, uint capColor, const char* name,
+                          bool waveGlyphs = false);
+    void drawWaveGlyph(float cx, float cy, int mode);
     void drawVolumeKnob(float cx, float cy, float norm);
     void drawLed(float cx, float cy, float level);
     void drawPushButton(float cx, float cy, bool pressed, uint color, const char* name);
@@ -34,6 +36,8 @@ private:
     float level_ = 0.f;
     int   pressedBtn_ = -1;   // param index of the held pushbutton
     bool  draggingVol_ = false;
+    int   draggingSel_ = -1;  // param index of the dragged rotary switch
+    int   dragStartPos_ = 0;
     float dragStartY_ = 0.f;
     float dragStartN_ = 0.f;
     bool  resLoaded_ = false;
