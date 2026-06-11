@@ -9,19 +9,51 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # DPF's Windows target is MinGW (dgl/NanoVG don't build under MSVC)
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-ccache
+
+      - name: Compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-mingw64-${{ github.sha }}
+          restore-keys: ccache-mingw64-
+
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DSIREN_BUILD_UI=ON -DSIREN_BUILD_TESTS=ON
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DSIREN_BUILD_UI=ON
+          -DSIREN_BUILD_TESTS=ON
 
       - name: Build
-        run: cmake --build build --config Release -j 4
+        run: cmake --build build -j 4
 
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build --output-on-failure
+
+      - name: ccache stats
+        run: ccache -s
 
       - name: Upload VST3
         uses: actions/upload-artifact@v4
