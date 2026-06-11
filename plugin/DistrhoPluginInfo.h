@@ -1,9 +1,9 @@
 #pragma once
 
-#define DISTRHO_PLUGIN_BRAND       "Nexus"
-#define DISTRHO_PLUGIN_NAME        "Siren"
+#define DISTRHO_PLUGIN_BRAND       "Dubplex"
+#define DISTRHO_PLUGIN_NAME        "DBT NJD Siren-1"
 #define DISTRHO_PLUGIN_URI         "https://github.com/LeoFabre/njd-siren-dpf"
-#define DISTRHO_PLUGIN_CLAP_ID     "fr.nexus.siren"
+#define DISTRHO_PLUGIN_CLAP_ID     "fr.dubplex.dbt-njd-siren-1"
 #define DISTRHO_PLUGIN_NUM_INPUTS  2
 #define DISTRHO_PLUGIN_NUM_OUTPUTS 2
 #define DISTRHO_PLUGIN_IS_RT_SAFE  1
