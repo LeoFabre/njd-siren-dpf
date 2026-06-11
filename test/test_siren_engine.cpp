@@ -64,7 +64,7 @@ int main()
         CHECK(rms < 1.5f, "gate on -> bounded level");
     }
 
-    // 3. Gate on then off: envelope closes back to silence.
+    // 3. Gate on then off: the sound cuts immediately (2 ms de-click ramp).
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
@@ -74,8 +74,10 @@ int main()
         renderRms(eng, 100, 0);
         p.gate = false;
         eng.setParameters(p);
-        const float rms = renderRms(eng, 400, 350); // ~66 ms tail, measure after 466 ms
-        CHECK(rms < 1e-4f, "gate off -> envelope closes");
+        const float rmsEarly = renderRms(eng, 15, 8);  // 10..20 ms after release
+        CHECK(rmsEarly < 5e-3f, "gate off -> cuts within ~10 ms");
+        const float rmsLate = renderRms(eng, 50, 40);  // ~70 ms after release
+        CHECK(rmsLate < 1e-5f, "gate off -> fully silent shortly after");
     }
 
     // 4. Flavor comb: delay = one period of a fixed-pitch osc cancels all

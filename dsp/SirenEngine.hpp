@@ -44,7 +44,9 @@ public:
 
         smoothCoef_ = 1.0f - std::exp(-1.0f / (0.010f * fs_));
         ampAttCoef_ = 1.0f - std::exp(-1.0f / (0.003f * fs_));
-        ampRelCoef_ = 1.0f - std::exp(-1.0f / (0.050f * fs_));
+        // Release is a 2 ms de-click ramp: the sound must cut as soon as the
+        // trigger is released, like the hardware.
+        ampRelCoef_ = 1.0f - std::exp(-1.0f / (0.002f * fs_));
         levelDecay_ = std::exp(-1.0f / (0.080f * fs_));
         levelEnv_ = 0.0f;
 
