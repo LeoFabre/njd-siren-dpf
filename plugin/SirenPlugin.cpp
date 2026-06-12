@@ -74,7 +74,10 @@ void SirenPlugin::activate()
 
 void SirenPlugin::run(const float** inputs, float** outputs, uint32_t frames)
 {
-    ftz::armOnce();
+    // Unconditional re-arm: FPCR is per-thread and the write is a couple of
+    // system-register ops — cheaper than a thread_local lookup, and avoids
+    // dynamic-TLS allocation on the out-of-band audio thread.
+    ftz::enable();
 
     for (int ch = 0; ch < 2; ++ch)
         if (outputs[ch] != inputs[ch])
