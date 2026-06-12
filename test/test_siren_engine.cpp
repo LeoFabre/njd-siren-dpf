@@ -66,12 +66,12 @@ int main()
         CHECK(rms < 1.5f, "auto siren -> bounded level");
     }
 
-    // 3. TRIG with rocker OFF: sound while held, cuts right after release.
+    // 3. TRIG with rocker OFF (auto LFO): TRIG is pure power — sound rises
+    //    while held (C5 charges via the LFO), cuts right after release.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.speed = 3; // manual mode
         p.trigBtn = true;
         eng.setParameters(p);
         const float held = renderRms(eng, blocksFor(0.4f), blocksFor(0.1f));
@@ -82,9 +82,10 @@ int main()
         CHECK(after < 5e-3f, "TRIG released (no rocker) -> cuts immediately");
     }
 
-    // 4. Emergent envelope: rocker ON + SPEED OFF. Idle = stalled (C5 empty,
-    //    silence). TRIG charges C5 -> sound persists after release and dies
-    //    as C5 discharges through R23/R24.
+    // 4. Emergent envelope: rocker ON + SPEED OFF. Power alone = stalled
+    //    (C5 empty, silence — TRIG/rocker are pure power now). The TONE
+    //    button fast-charges C5 -> steady note; on release the sound
+    //    persists and dies as C5 discharges through R23/R24.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
@@ -93,18 +94,17 @@ int main()
         p.speed = 3;
         p.discharge_s = 0.5f;
         eng.setParameters(p);
-        const float attack = renderRms(eng, blocksFor(0.3f), blocksFor(0.02f));
-        CHECK(attack > 0.03f, "rocker on -> S1 kick sounds (same as TRIG)");
-        const float idle = renderRms(eng, blocksFor(3.0f), blocksFor(2.5f));
-        CHECK(idle < 1e-3f, "...then C5 drains: stalled, silent");
+        const float idle = renderRms(eng, blocksFor(1.0f), blocksFor(0.1f));
+        CHECK(idle < 1e-3f, "rocker on, SPEED off -> stalled, silent (no kick)");
 
-        p.trigBtn = true;
+        p.toneBtn = true;
         eng.setParameters(p);
-        renderRms(eng, blocksFor(0.2f), 0);
-        p.trigBtn = false;
+        const float note = renderRms(eng, blocksFor(0.5f), blocksFor(0.2f));
+        CHECK(note > 0.03f, "TONE under rocker -> note sounds");
+        p.toneBtn = false;
         eng.setParameters(p);
         const float tail = renderRms(eng, blocksFor(0.3f), blocksFor(0.05f));
-        CHECK(tail > 0.03f, "TRIG released under rocker -> discharge tail sounds");
+        CHECK(tail > 0.03f, "TONE released under rocker -> discharge tail sounds");
         const float dead = renderRms(eng, blocksFor(4.0f), blocksFor(3.5f));
         CHECK(dead < 1e-3f, "discharge tail dies out (C5 drained)");
     }

@@ -9,10 +9,10 @@ enum class Param : uint32_t {
     mode,        // S4 rotary 1/2/3/4: modulation routing per osc half
     speed,       // S3 rotary 1/2/3/OFF: LFO rate, OFF = LFO stopped
     volume,
-    toneBtn,     // pushbutton: force fixed pitch (D1/D2/R8/R9)
-    sirenBtn,    // pushbutton S2: slow-charge C5 through R25 (wind-up)
-    trigger,     // pushbutton S1: fast-charge C5 + reset the LFO square
-    hold,        // rocker S6: latched power (buttons power while held)
+    toneBtn,     // BP2/S1: fast-charge C5 + hold the LFO (steady note)
+    sirenBtn,    // BP1/S2: slow-charge C5 through R25 (wind-up)
+    trigger,     // momentary power, wired across SIREN ON
+    hold,        // rocker: latched power (same path as trigger)
     // Fine-tune (host/webapp only, not on the panel)
     charge,      // R25*C5 wind-up time constant
     discharge,   // R23/R24*C5 fall time constant
