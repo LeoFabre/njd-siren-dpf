@@ -1,6 +1,7 @@
-// Offline checks for SirenEngine: gate behavior, signal sanity, and the
-// "NJD flavor" comb (a delay of exactly one oscillator period must cancel
-// every harmonic of the pulse, so output collapses toward silence).
+// Offline checks for the NJD circuit model. The interesting behaviors are
+// EMERGENT from the astable + C5 physics, so that's what we assert:
+// stall-silence when C5 is empty, the discharge tail after a trigger while
+// the rocker holds power, two-tone stall gaps, and the SIREN wind-up.
 #include "SirenEngine.hpp"
 #include <cstdio>
 #include <cmath>
@@ -16,6 +17,7 @@ static int failures = 0;
 static constexpr float kFs = 48000.0f;
 static constexpr int kBlock = 64;
 
+// Renders numBlocks, returns rms of the blocks after skipBlocks.
 static float renderRms(SirenEngine& eng, int numBlocks, int skipBlocks)
 {
     float bufL[kBlock], bufR[kBlock];
@@ -38,114 +40,154 @@ static float renderRms(SirenEngine& eng, int numBlocks, int skipBlocks)
     return (float) std::sqrt(acc / n);
 }
 
+static int blocksFor(float seconds) { return (int)(seconds * kFs / kBlock); }
+
 int main()
 {
-    // 1. Gate off from a fresh engine: exact passthrough (adds nothing).
+    // 1. Everything off: exact silence (power off, adds nothing).
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.gate = false;
         eng.setParameters(p);
-        const float rms = renderRms(eng, 20, 0);
-        CHECK(rms == 0.0f, "gate off -> silence");
+        CHECK(renderRms(eng, 50, 0) == 0.0f, "all off -> silence");
     }
 
-    // 2. Gate on: signal present, finite, bounded.
+    // 2. Rocker on, auto siren (mode 1 wail): audible, finite, bounded.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.gate = true;
+        p.power = true;
         eng.setParameters(p);
-        const float rms = renderRms(eng, 200, 50);
-        CHECK(std::isfinite(rms), "gate on -> finite output");
-        CHECK(rms > 0.05f, "gate on -> audible level");
-        CHECK(rms < 1.5f, "gate on -> bounded level");
+        const float rms = renderRms(eng, blocksFor(3.0f), blocksFor(0.5f));
+        CHECK(std::isfinite(rms), "auto siren -> finite output");
+        CHECK(rms > 0.03f, "auto siren -> audible level");
+        CHECK(rms < 1.5f, "auto siren -> bounded level");
     }
 
-    // 3. Gate on then off: the sound cuts immediately (2 ms de-click ramp).
+    // 3. TRIG with rocker OFF: sound while held, cuts right after release.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.gate = true;
+        p.speed = 3; // manual mode
+        p.trigBtn = true;
         eng.setParameters(p);
-        renderRms(eng, 100, 0);
-        p.gate = false;
+        const float held = renderRms(eng, blocksFor(0.4f), blocksFor(0.1f));
+        CHECK(held > 0.03f, "TRIG held -> sound");
+        p.trigBtn = false;
         eng.setParameters(p);
-        const float rmsEarly = renderRms(eng, 15, 8);  // 10..20 ms after release
-        CHECK(rmsEarly < 5e-3f, "gate off -> cuts within ~10 ms");
-        const float rmsLate = renderRms(eng, 50, 40);  // ~70 ms after release
-        CHECK(rmsLate < 1e-5f, "gate off -> fully silent shortly after");
+        const float after = renderRms(eng, blocksFor(0.1f), blocksFor(0.02f));
+        CHECK(after < 5e-3f, "TRIG released (no rocker) -> cuts immediately");
     }
 
-    // 4. Flavor comb: delay = one period of a fixed-pitch osc cancels all
-    //    harmonics. f0 = 500 Hz, delay = 2 ms, modulation amount = 0.
-    {
-        SirenEngine::Params p;
-        p.gate = true;
-        p.amount_pct = 0.0f;
-        p.drive_dB = 0.0f;
-        p.sparkle_pct = 0.0f;
-        // pitch01 such that 60 * 25^p = 500 Hz
-        p.pitch01 = std::log(500.0f / 60.0f) / std::log(25.0f);
-        p.flavorTime_ms = 2.0f;
-
-        SirenEngine engDry, engComb;
-        engDry.prepare(kFs, kBlock);
-        engComb.prepare(kFs, kBlock);
-        p.flavor_pct = 0.0f;
-        engDry.setParameters(p);
-        p.flavor_pct = 100.0f;
-        engComb.setParameters(p);
-
-        const float rmsDry = renderRms(engDry, 300, 100);
-        const float rmsComb = renderRms(engComb, 300, 100);
-        std::printf("      comb cancellation: dry rms=%.4f comb rms=%.4f\n", rmsDry, rmsComb);
-        CHECK(rmsDry > 0.1f, "comb test: dry reference is loud");
-        CHECK(rmsComb < rmsDry * 0.12f, "flavor comb cancels harmonics at 1/period delay");
-    }
-
-    // 5. SPEED -> OFF while playing: capacitor discharge. The pitch CV decays
-    //    slowly, the oscillator slides below the 100 Hz high-pass and the
-    //    output dies out — instead of snapping to the fixed tone.
+    // 4. Emergent envelope: rocker ON + SPEED OFF. Idle = stalled (C5 empty,
+    //    silence). TRIG charges C5 -> sound persists after release and dies
+    //    as C5 discharges through R23/R24.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.gate = true;
-        p.discharge_s = 0.4f;  // shortened so the test stays fast
+        p.power = true;
+        p.speed = 3;
+        p.discharge_s = 0.5f;
         eng.setParameters(p);
-        renderRms(eng, 200, 0);  // ~270 ms of normal sweep
+        const float idle = renderRms(eng, blocksFor(1.0f), blocksFor(0.3f));
+        CHECK(idle < 1e-3f, "rocker on, C5 empty -> stalled, silent");
 
-        p.sweepEnabled = false;
-        p.speedOff = true;
+        p.trigBtn = true;
         eng.setParameters(p);
-
-        // Right after the switch the tone is still sounding (slow discharge)…
-        const float rmsEarly = renderRms(eng, 40, 0);    // first ~50 ms
-        CHECK(rmsEarly > 0.05f, "speed OFF -> tone still sounding right after");
-
-        // …after ~7 time constants the CV is drained: silence while gate held.
-        renderRms(eng, (int)(7 * 0.4f * kFs / kBlock), 0);
-        const float rmsLate = renderRms(eng, 80, 0);
-        std::printf("      discharge: early rms=%.4f late rms=%.6f\n", rmsEarly, rmsLate);
-        CHECK(rmsLate < 2e-3f, "speed OFF -> discharges to silence");
+        renderRms(eng, blocksFor(0.2f), 0);
+        p.trigBtn = false;
+        eng.setParameters(p);
+        const float tail = renderRms(eng, blocksFor(0.3f), blocksFor(0.05f));
+        CHECK(tail > 0.03f, "TRIG released under rocker -> discharge tail sounds");
+        const float dead = renderRms(eng, blocksFor(4.0f), blocksFor(3.5f));
+        CHECK(dead < 1e-3f, "discharge tail dies out (C5 drained)");
     }
 
-    // 6. Fresh trigger with SPEED already OFF: normal fixed tone (the caps
-    //    only hold a charge while playing).
+    // 5. Mode 2 (square/fixed): square-low half stalls -> alternating
+    //    sound/silence windows at the LFO rate.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
-        p.gate = true;
-        p.sweepEnabled = false;
-        p.speedOff = true;
+        p.power = true;
+        p.mode = 1;
+        p.speed = 0; // 1.53 Hz: half = 0.326 s
         eng.setParameters(p);
-        const float rms = renderRms(eng, 200, 50);
-        CHECK(rms > 0.05f, "fresh trigger with speed OFF -> fixed tone plays");
+        renderRms(eng, blocksFor(1.0f), 0); // settle
+        float wMin = 1e9f, wMax = 0.0f;
+        for (int w = 0; w < 12; ++w)
+        {
+            const float r = renderRms(eng, blocksFor(0.1f), 0);
+            wMin = std::min(wMin, r);
+            wMax = std::max(wMax, r);
+        }
+        CHECK(wMax > 0.05f, "two-tone: loud windows present");
+        CHECK(wMin < wMax * 0.1f, "two-tone: stall gaps present");
+    }
+
+    // 6. TONE button: steady fixed pitch (constant zero-crossing rate).
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.toneBtn = true;
+        eng.setParameters(p);
+        float bufL[kBlock], bufR[kBlock];
+        float* bufs[2] = { bufL, bufR };
+        int zc[2] = { 0, 0 };
+        float prev = 0.0f;
+        const int settle = blocksFor(0.3f), win = blocksFor(0.5f);
+        for (int b = 0; b < settle + 2 * win; ++b)
+        {
+            for (int i = 0; i < kBlock; ++i) { bufL[i] = 0.0f; bufR[i] = 0.0f; }
+            eng.process(bufs, 2, kBlock);
+            if (b < settle) continue;
+            const int w = (b - settle) / win;
+            for (int i = 0; i < kBlock; ++i)
+            {
+                if (prev <= 0.0f && bufL[i] > 0.0f) ++zc[w];
+                prev = bufL[i];
+            }
+        }
+        std::printf("      tone zc: %d vs %d (~f0 = %d Hz)\n", zc[0], zc[1], zc[0] * 2);
+        CHECK(zc[0] > 50, "tone button -> oscillating");
+        CHECK(std::abs(zc[0] - zc[1]) <= 2, "tone button -> steady pitch");
+    }
+
+    // 7. SIREN wind-up: the pitch climbs as C5 charges through R25 (the
+    //    wind-up is in frequency, not amplitude — the square is full level
+    //    as soon as it oscillates).
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.speed = 3;
+        p.charge_s = 0.4f;
+        p.sirenBtn = true;
+        eng.setParameters(p);
+        float bufL[kBlock], bufR[kBlock];
+        float* bufs[2] = { bufL, bufR };
+        const int win = blocksFor(0.2f);
+        int zcEarly = 0, zcLate = 0;
+        float prev = 0.0f;
+        for (int b = 0; b < blocksFor(1.0f); ++b)
+        {
+            for (int i = 0; i < kBlock; ++i) { bufL[i] = 0.0f; bufR[i] = 0.0f; }
+            eng.process(bufs, 2, kBlock);
+            int* zc = b < win ? &zcEarly : (b >= blocksFor(0.8f) ? &zcLate : nullptr);
+            for (int i = 0; i < kBlock; ++i)
+            {
+                if (zc && prev <= 0.0f && bufL[i] > 0.0f) ++(*zc);
+                prev = bufL[i];
+            }
+        }
+        std::printf("      windup zc: early=%d late=%d (f0 ~%d -> ~%d Hz)\n",
+                    zcEarly, zcLate, zcEarly * 5, zcLate * 5);
+        CHECK(zcLate > zcEarly * 3 / 2, "SIREN wind-up: pitch climbs with C5 charge");
     }
 
     std::printf(failures == 0 ? "ALL OK\n" : "%d FAILURE(S)\n", failures);

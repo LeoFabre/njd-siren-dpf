@@ -4,18 +4,28 @@ NJD-style dub siren generator (DPF, VST3 + LV2) for the nexus-preamp rig.
 
 ![Faceplate UI](docs/faceplate.png)
 
-DSP recipe reverse-engineered from the Ableton Wavetable rack shown in
-« le son de sirène analo avec un wavetable !!! » (youtube zmCO6T_ksno):
+Circuit model of the real unit (ZEN Instruments / Zack Nelson schematic redraw),
+not a synth recipe:
 
-- Mono PolyBLEP **pulse oscillator**, pitch 60–1500 Hz (exponential `pitch` knob).
-- Pitch modulated by **LFO1** (sine/tri/saw/square + shape morph, 1–15 Hz, retriggered
-  at 180° on gate-on), **LFO2** (free), and an **attack envelope** (0–800 ms, lick shots).
-  Modulation depths use the Ableton matrix scale (100 % = ±48 st): LFO1 = 15→20 %
-  coupled to the pitch knob (NJD behavior), env = 18 %, LFO2 = 0–100 %.
-  `amount` scales everything 0–200 % (lasers).
-- **NJD Flavor**: phase-inverted copy of the oscillator delayed by 1–2 ms summed back
-  in — the moving comb notches the real NJD's transistor-reset produces.
-- Post: tube drive (tanh), resonant **12 kHz sparkle peak**, 100 Hz high-pass.
+- **Main oscillator**: two-transistor astable. Each half-period is
+  `t = R*C*ln((Vm + 9 - 1.3)/(Vm - 0.65))` with its OWN modulation voltage `Vm`,
+  so pitch and duty cycle move together — the pulse spectrum's moving notches
+  ARE the NJD grain. `Vm < 0.65 V` stalls the oscillator: silence (this is how
+  the unit goes quiet, there is no envelope anywhere).
+- **LFO**: same astable (1.5/3.3/7.2 Hz from SPEED). Its square charges C5
+  through D4/R22 (~0.1 s); C5 discharges through R23/R24 (`discharge` knob) —
+  the shaped "uneven triangle". SPEED OFF freezes the LFO: the siren chokes at
+  rest and is played with the buttons.
+- **Buttons**: TRIG = S1 (fast-charge C5 + LFO reset), SIREN = S2 (slow charge
+  through R25, `charge` knob — the wind-up is capacitor physics), TONE = forces
+  the fixed-pitch routing (D1/D2/R8/R9, ~330 Hz at TONE 2). Rocker = S6 power,
+  latched; buttons power the unit while held (release = 2 ms cut). With the
+  rocker ON, releasing TRIG leaves the authentic falling discharge tail.
+- **MODE** routes the sources onto the two halves: 1 wail (shaped/fixed),
+  2 two-tone with stall gaps (square/fixed), 3 chaos (shaped/square), 4 fixed.
+- **Output**: 2x one-pole 106 Hz HP (C9/R26, C8/R27), 6 kHz edge rounding,
+  optional tanh drive. The PWR LED follows C5 (the sweep), like the real T5
+  LED driver.
 
 The plugin is a 2-in/2-out **insert**: input passes through untouched and the siren is
 summed on top, so it drops anywhere in a sushi chain (before Dubwize / reverb sends).

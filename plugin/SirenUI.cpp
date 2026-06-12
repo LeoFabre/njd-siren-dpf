@@ -51,7 +51,7 @@ void SirenUI::parameterChanged(uint32_t index, float value)
 {
     if (index < (uint32_t) kNumControlParams)
         values_[index] = value;
-    else if (index == (uint32_t) idx(Param::outLevel))
+    else if (index == (uint32_t) idx(Param::ledLevel))
         level_ = value;
     repaint();
 }
@@ -179,8 +179,9 @@ void SirenUI::drawRotarySwitch(float cx, float cy, int pos, int numPos,
     text(cx, cy + kKnobR + 45.f, name, nullptr);
 }
 
-// Small waveform icons for the MODE positions, matching kModes in the plugin:
-// 1 tri (wail), 2 saw (falling sweep), 3 square (two-tone), 4 clipped tri.
+// Small icons for the MODE positions, matching kRoute in the engine:
+// 1 wail (shaped LFO), 2 two-tone square w/ stall gaps, 3 shaped vs square
+// (complex), 4 fixed tone.
 void SirenUI::drawWaveGlyph(float cx, float cy, int mode)
 {
     const float w = 22.f, h = 12.f;
@@ -190,31 +191,29 @@ void SirenUI::drawWaveGlyph(float cx, float cy, int mode)
     beginPath();
     switch (mode)
     {
-    case 0: // triangle: \/\ rise-fall
-        moveTo(x0, cy);
-        lineTo(x0 + w * 0.25f, yT);
-        lineTo(x0 + w * 0.75f, yB);
-        lineTo(x1, cy);
-        break;
-    case 1: // saw: two falling ramps
-        moveTo(x0, yT);
-        lineTo(x0 + w * 0.5f, yB);
-        lineTo(x0 + w * 0.5f, yT);
+    case 0: // wail: fast charge, slow discharge (the shaped LFO on C5)
+        moveTo(x0, yB);
+        lineTo(x0 + w * 0.3f, yT);
         lineTo(x1, yB);
         break;
-    case 2: // square: two-tone
+    case 1: // two-tone: square bursts with gaps
         moveTo(x0, yT);
-        lineTo(x0 + w * 0.5f, yT);
-        lineTo(x0 + w * 0.5f, yB);
-        lineTo(x1, yB);
+        lineTo(x0 + w * 0.45f, yT);
+        lineTo(x0 + w * 0.45f, yB);
+        lineTo(x0 + w * 0.65f, yB);
+        lineTo(x0 + w * 0.65f, yT);
         lineTo(x1, yT);
         break;
-    default: // clipped tri: trapezoid (hard wail)
+    case 2: // complex: ramp then square chunk
         moveTo(x0, yB);
-        lineTo(x0 + w * 0.22f, yT);
-        lineTo(x0 + w * 0.62f, yT);
-        lineTo(x0 + w * 0.84f, yB);
-        lineTo(x1, yB);
+        lineTo(x0 + w * 0.3f, yT);
+        lineTo(x0 + w * 0.5f, yB);
+        lineTo(x0 + w * 0.5f, yT);
+        lineTo(x1, yT);
+        break;
+    default: // fixed tone: flat line
+        moveTo(x0, cy);
+        lineTo(x1, cy);
         break;
     }
     strokeColor(rgb(0x2a2a26));
