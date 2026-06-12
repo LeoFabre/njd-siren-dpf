@@ -92,6 +92,10 @@ void SirenPlugin::run(const float** inputs, float** outputs, uint32_t frames)
             .discharge_s  = params_[idx(Param::discharge)],
             .amount_pct   = params_[idx(Param::amount)],
             .drive_dB     = params_[idx(Param::drive)],
+            .bleed_pct    = params_[idx(Param::bleed)],
+            .capRatio     = params_[idx(Param::capRatio)],
+            .vbe_V        = params_[idx(Param::vbe)],
+            .edgeHz       = params_[idx(Param::edge)],
         };
         engine_.setParameters(p);
         requiresUpdate_ = false;

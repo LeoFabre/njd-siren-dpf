@@ -18,12 +18,17 @@ enum class Param : uint32_t {
     discharge,   // R23/R24*C5 fall time constant
     amount,      // modulation scale about 4.5 V (not in circuit)
     drive,       // post drive (not in circuit)
+    // Dev/physics trims (component tolerances of the real unit)
+    bleed,       // half-A source leaking into half B's pull-up
+    capRatio,    // C2/C1 mismatch
+    vbe,         // transistor threshold (stall point / dive shape)
+    edge,        // collector edge rounding (output LP)
     // Output params
     ledLevel,    // T5/LED1: follows C5 (the sweep), drives the panel LED
 };
 
 constexpr int kNumPanelParams   = 8;
-constexpr int kNumControlParams = 12;
+constexpr int kNumControlParams = 16;
 constexpr int kNumOutputParams  = 1;
 
 struct ParamInfo {
@@ -70,7 +75,15 @@ static constexpr ParamInfo kParams[kNumControlParams + kNumOutputParams] = {
     { "amount",    "Mod Amount", 0.0f, 200.0f, 100.0f, false, false, false, false, 0, nullptr },
     // 11 drive
     { "drive",     "Drive",      0.0f,  12.0f,   4.0f, false, false, false, false, 0, nullptr },
-    // 12 ledLevel (output)
+    // 12 bleed
+    { "bleed",     "Mod Bleed",  0.0f, 100.0f,   0.0f, false, false, false, false, 0, nullptr },
+    // 13 capRatio
+    { "capRatio",  "Cap Ratio",  0.5f,   2.0f,   1.0f, false, false, false, false, 0, nullptr },
+    // 14 vbe
+    { "vbe",       "Vbe",        0.3f,   1.2f,  0.65f, false, false, false, false, 0, nullptr },
+    // 15 edge
+    { "edge",      "Edge LP",  500.0f, 16000.0f, 6000.0f, false, false, false, true, 0, nullptr },
+    // 16 ledLevel (output)
     { "ledLevel",  "LED Level",  0.0f,   1.0f,   0.0f, false, false, true,  false, 0, nullptr },
 };
 

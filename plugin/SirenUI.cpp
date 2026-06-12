@@ -27,6 +27,35 @@ static constexpr float kBtnToneX = 305.f, kBtnSirenX = 390.f, kBtnTrigX = 475.f;
 static constexpr float kRockX = 612.f,  kRockY = 470.f;
 static constexpr float kKnobR = 50.f;
 
+// Dev strip: physics trims to hunt the real unit's character by ear.
+struct DevKnobDef { Param p; const char* label; };
+static const DevKnobDef kDevKnobs[] = {
+    { Param::bleed,     "BLEED"  },
+    { Param::capRatio,  "C2/C1"  },
+    { Param::vbe,       "VBE"    },
+    { Param::edge,      "EDGE"   },
+    { Param::discharge, "DISCHG" },
+    { Param::amount,    "AMOUNT" },
+};
+static constexpr int kNumDevKnobs = 6;
+static constexpr float kDevY = 640.f;
+static constexpr float kDevR = 16.f;
+static inline float devKnobX(int i) { return 95.f + 110.f * (float) i; }
+
+static float toNorm(const siren::ParamInfo& pi, float v)
+{
+    if (pi.isLogarithmic)
+        return std::log(v / pi.min) / std::log(pi.max / pi.min);
+    return (v - pi.min) / (pi.max - pi.min);
+}
+
+static float fromNorm(const siren::ParamInfo& pi, float n)
+{
+    if (pi.isLogarithmic)
+        return pi.min * std::pow(pi.max / pi.min, n);
+    return pi.min + n * (pi.max - pi.min);
+}
+
 static const char* kPosTone[]  = { "1", "2", "3" };
 static const char* kPosMode[]  = { "1", "2", "3", "4" };
 static const char* kPosSpeed[] = { "1", "2", "3", "OFF" };
@@ -113,6 +142,53 @@ void SirenUI::onNanoDisplay()
     drawPushButton(kBtnTrigX,  kBtnY, values_[idx(Param::trigger)]  > 0.5f, 0xd8362c, "TRIG");
 
     drawRocker(kRockX, kRockY, values_[idx(Param::hold)] > 0.5f);
+
+    // Dev strip separator + trims.
+    beginPath();
+    moveTo(26.f, 602.f);
+    lineTo(kWidth - 26.f, 602.f);
+    strokeColor(rgb(0x6f6a61));
+    stroke();
+    fontSize(10.f);
+    textAlign(ALIGN_LEFT | ALIGN_BASELINE);
+    fillColor(rgb(0x55514a));
+    text(28.f, 616.f, "DEV — physics trims", nullptr);
+    for (int i = 0; i < kNumDevKnobs; ++i)
+        drawDevKnob(devKnobX(i), kDevY, idx(kDevKnobs[i].p), kDevKnobs[i].label);
+}
+
+void SirenUI::drawDevKnob(float cx, float cy, int paramIdx, const char* label)
+{
+    const auto& pi = paramInfo(static_cast<Param>(paramIdx));
+    const float n = std::clamp(toNorm(pi, values_[paramIdx]), 0.f, 1.f);
+
+    beginPath();
+    circle(cx, cy, kDevR);
+    fillColor(rgb(0x2c2a26));
+    fill();
+    strokeColor(rgb(0x55514a));
+    stroke();
+
+    const float a = deg2rad(-225.f + n * 270.f);
+    beginPath();
+    moveTo(cx + std::cos(a) * 5.f, cy + std::sin(a) * 5.f);
+    lineTo(cx + std::cos(a) * (kDevR - 2.f), cy + std::sin(a) * (kDevR - 2.f));
+    strokeColor(rgb(0xd8d2c6));
+    strokeWidth(2.f);
+    stroke();
+    strokeWidth(1.f);
+
+    char buf[32];
+    if (pi.max >= 1000.f)
+        std::snprintf(buf, sizeof(buf), "%.0f", (double) values_[paramIdx]);
+    else
+        std::snprintf(buf, sizeof(buf), "%.2f", (double) values_[paramIdx]);
+    fontSize(10.f);
+    textAlign(ALIGN_CENTER | ALIGN_BASELINE);
+    fillColor(rgb(0x3c3933));
+    text(cx, cy + kDevR + 13.f, label, nullptr);
+    fillColor(rgb(0x55514a));
+    text(cx, cy + kDevR + 25.f, buf, nullptr);
 }
 
 void SirenUI::drawRotarySwitch(float cx, float cy, int pos, int numPos,
@@ -376,6 +452,9 @@ int SirenUI::hitTest(float mx, float my) const
     if (inCircle(kBtnTrigX, kBtnY, 24.f))         return idx(Param::trigger);
     if (mx >= kRockX - 28.f && mx <= kRockX + 28.f
         && my >= kRockY - 48.f && my <= kRockY + 48.f) return idx(Param::hold);
+    for (int i = 0; i < kNumDevKnobs; ++i)
+        if (inCircle(devKnobX(i), kDevY, kDevR + 6.f))
+            return idx(kDevKnobs[i].p);
     return -1;
 }
 
@@ -398,12 +477,13 @@ bool SirenUI::onMouse(const MouseEvent& ev)
             dragStartPos_ = (int) values_[i];
             return true;
         }
-        if (i == idx(Param::volume))
+        const auto& pi = paramInfo(static_cast<Param>(i));
+        if (!pi.isBool && !pi.isInteger)
         {
-            const auto& pi = paramInfo(Param::volume);
-            draggingVol_ = true;
+            // Continuous knob (volume or a dev trim): vertical drag.
+            draggingCont_ = i;
             dragStartY_ = ev.pos.getY();
-            dragStartN_ = std::clamp((values_[i] - pi.min) / (pi.max - pi.min), 0.f, 1.f);
+            dragStartN_ = std::clamp(toNorm(pi, values_[i]), 0.f, 1.f);
             return true;
         }
         if (i == idx(Param::hold))
@@ -423,7 +503,7 @@ bool SirenUI::onMouse(const MouseEvent& ev)
         return true;
     }
 
-    draggingVol_ = false;
+    draggingCont_ = -1;
     draggingSel_ = -1;
     if (pressedBtn_ >= 0)
     {
@@ -452,15 +532,15 @@ bool SirenUI::onMotion(const MotionEvent& ev)
         return true;
     }
 
-    if (!draggingVol_)
+    if (draggingCont_ < 0)
         return false;
 
-    const auto& pi = paramInfo(Param::volume);
+    const auto& pi = paramInfo(static_cast<Param>(draggingCont_));
     const float dy = dragStartY_ - ev.pos.getY();
     const float n = std::clamp(dragStartN_ + dy / 200.f, 0.f, 1.f);
-    const float v = pi.min + n * (pi.max - pi.min);
-    values_[idx(Param::volume)] = v;
-    setParameterValue((uint32_t) idx(Param::volume), v);
+    const float v = fromNorm(pi, n);
+    values_[draggingCont_] = v;
+    setParameterValue((uint32_t) draggingCont_, v);
     repaint();
     return true;
 }

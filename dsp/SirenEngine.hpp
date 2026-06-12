@@ -39,6 +39,14 @@ public:
         float discharge_s  = 2.0f;   // R23/R24*C5: manual / SPEED-OFF fall
         float amount_pct   = 100.0f; // mod scale about 4.5 V (not in circuit)
         float drive_dB     = 4.0f;   // post drive (not in circuit)
+        // Dev/physics trims: component tolerances of the real unit.
+        float bleed_pct    = 0.0f;   // half-A source leaking into half B's
+                                     // pull-up (R8/R9 vs ladder): duty drifts
+                                     // through more notch positions
+        float capRatio     = 1.0f;   // C2/C1 mismatch: scales half-B period
+        float vbe_V        = 0.65f;  // transistor threshold: stall point and
+                                     // the shape of the dying dive
+        float edgeHz       = 6000.0f;// collector edge rounding (output LP)
     };
 
     void prepare(double sampleRate, int /*maxBlockSize*/)
@@ -120,6 +128,9 @@ public:
         const float volTarget = dB2lin(p_.volume_dB);
         const float pre = dB2lin(p_.drive_dB);
         const float driveNorm = 1.0f / std::tanh(std::max(0.1f, pre));
+        const float bleed = p_.bleed_pct / 100.0f;
+        lpCoef_ = 1.0f - std::exp(-6.2831853f
+                                  * std::clamp(p_.edgeHz, 200.0f, 0.45f * fs_) * dt_);
 
         for (int i = 0; i < numFrames; ++i)
         {
@@ -146,9 +157,19 @@ public:
             ramp_ += rampCoef_ * ((effPower ? 1.0f : 0.0f) - ramp_);
 
             // ---- main oscillator ----------------------------------------
-            float Vm = srcVoltage(route[halfA_ ? 0 : 1]);
+            float Vm;
+            if (halfA_)
+                Vm = srcVoltage(route[0]);
+            else
+            {
+                // R8/R9 leakage: half A's source bleeds into half B's pull-up
+                const float vB = srcVoltage(route[1]);
+                Vm = vB + bleed * (srcVoltage(route[0]) - vB);
+            }
             Vm = 4.5f + amountS_ * (Vm - 4.5f);
-            const float th = tHalf(Vm, Rosc);
+            float th = tHalf(Vm, Rosc);
+            if (!halfA_ && th > 0.0f)
+                th *= p_.capRatio;          // C1/C2 tolerance mismatch
             const float inc = th > 0.0f ? dt_ / th : 0.0f;
 
             float prevCorr = 0.0f, nowCorr = 0.0f;
@@ -214,9 +235,10 @@ private:
     // when the transistor can never switch: the oscillator stalls (silence).
     float tHalf(float Vm, float R) const
     {
-        if (Vm < kVbe + 0.02f)
+        const float vbe = p_.vbe_V;
+        if (Vm < vbe + 0.02f)
             return -1.0f;
-        return R * kCosc * std::log((Vm + kVcc - 1.3f) / (Vm - kVbe));
+        return R * kCosc * std::log((Vm + kVcc - 2.0f * vbe) / (Vm - vbe));
     }
 
     static float dB2lin(float dB) { return std::exp2(dB * 0.166096404f); }
