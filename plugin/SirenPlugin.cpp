@@ -1,4 +1,5 @@
 #include "SirenPlugin.hpp"
+#include "../dsp/DenormalGuard.hpp"
 #include <cstring>
 
 START_NAMESPACE_DISTRHO
@@ -73,6 +74,8 @@ void SirenPlugin::activate()
 
 void SirenPlugin::run(const float** inputs, float** outputs, uint32_t frames)
 {
+    ftz::armOnce();
+
     for (int ch = 0; ch < 2; ++ch)
         if (outputs[ch] != inputs[ch])
             std::memcpy(outputs[ch], inputs[ch], frames * sizeof(float));
