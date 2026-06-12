@@ -164,9 +164,14 @@ public:
                 Vm = srcVoltage(route[0]);
             else
             {
-                // R8/R9 leakage: half A's source bleeds into half B's pull-up
+                // D1/D2 + R8/R9: the 220k diode path drags half B's pull-up
+                // DOWN toward half A's source, conducting only when that
+                // source sits a diode drop below (half-wave). During the
+                // discharge fall both half-periods stretch at different
+                // rates, so the duty keeps sweeping the spectral notches all
+                // the way down — until half A stalls and the unit goes quiet.
                 const float vB = srcVoltage(route[1]);
-                Vm = vB + bleed * (srcVoltage(route[0]) - vB);
+                Vm = vB - bleed * std::max(0.0f, vB - (srcVoltage(route[0]) + 0.6f));
             }
             Vm = 4.5f + amountS_ * (Vm - 4.5f);
             float th = tHalf(Vm, Rosc);

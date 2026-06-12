@@ -69,14 +69,23 @@ static float detentAngleDeg(int pos, int numPos)
 
 SirenUI::SirenUI() : UI((uint)kWidth, (uint)kHeight)
 {
-    setSize((uint)kWidth, (uint)kHeight);
-    // Resizable window: enlarging scales the whole faceplate uniformly (the
-    // minimum IS the logical drawing space; DGL maps mouse events back to it).
-    setGeometryConstraints((uint)kWidth, (uint)kHeight,
-                           /*keepAspectRatio=*/true, /*automaticallyScale=*/true);
+    // Resizable window with manual uniform scaling: DGL's automaticallyScale
+    // mis-maps mouse events on retina standalone builds (events arrive in
+    // physical pixels but are not divided), so we scale the drawing and
+    // un-scale the mouse ourselves via uiScale(). 740x700 stays the logical
+    // coordinate space for everything below.
+    const double sf = getScaleFactor();
+    setGeometryConstraints((uint)(kWidth * sf * 0.5), (uint)(kHeight * sf * 0.5),
+                           /*keepAspectRatio=*/true, /*automaticallyScale=*/false);
+    setSize((uint)(kWidth * sf), (uint)(kHeight * sf));
 
     for (int i = 0; i < kNumControlParams; ++i)
         values_[i] = paramInfo(static_cast<Param>(i)).def;
+}
+
+float SirenUI::uiScale() const
+{
+    return (float) getWidth() / kWidth;
 }
 
 void SirenUI::parameterChanged(uint32_t index, float value)
@@ -92,6 +101,9 @@ void SirenUI::onNanoDisplay()
 {
     if (!resLoaded_) { loadSharedResources(); resLoaded_ = true; }
     fontFaceId(findFont(NANOVG_DEJAVU_SANS_TTF));
+
+    const float s = uiScale();
+    scale(s, s);
 
     // Brushed grey faceplate with engraved border and corner screws.
     beginPath();
@@ -499,7 +511,10 @@ bool SirenUI::onMouse(const MouseEvent& ev)
 
     if (ev.press)
     {
-        const int i = hitTest(ev.pos.getX(), ev.pos.getY());
+        const float s = uiScale();
+        const float mx = ev.pos.getX() / s;
+        const float my = ev.pos.getY() / s;
+        const int i = hitTest(mx, my);
         if (i < 0)
             return false;
 
@@ -507,7 +522,7 @@ bool SirenUI::onMouse(const MouseEvent& ev)
         {
             // Detented knob: drag up/down to step through the positions.
             draggingSel_ = i;
-            dragStartY_ = ev.pos.getY();
+            dragStartY_ = my;
             dragStartPos_ = (int) values_[i];
             return true;
         }
@@ -516,7 +531,7 @@ bool SirenUI::onMouse(const MouseEvent& ev)
         {
             // Continuous knob (volume or a dev trim): vertical drag.
             draggingCont_ = i;
-            dragStartY_ = ev.pos.getY();
+            dragStartY_ = my;
             dragStartN_ = std::clamp(toNorm(pi, values_[i]), 0.f, 1.f);
             return true;
         }
@@ -551,11 +566,15 @@ bool SirenUI::onMouse(const MouseEvent& ev)
 
 bool SirenUI::onMotion(const MotionEvent& ev)
 {
+    const float s = uiScale();
+    const float mx = ev.pos.getX() / s;
+    const float my = ev.pos.getY() / s;
+
     if (draggingSel_ >= 0)
     {
         // One detent per 30 px, dragging up increases.
         const int n = paramInfo(static_cast<Param>(draggingSel_)).numChoices;
-        const int steps = (int) std::lround((dragStartY_ - ev.pos.getY()) / 30.f);
+        const int steps = (int) std::lround((dragStartY_ - my) / 30.f);
         const int pos = std::clamp(dragStartPos_ + steps, 0, n - 1);
         if (pos != (int) values_[draggingSel_])
         {
@@ -569,7 +588,6 @@ bool SirenUI::onMotion(const MotionEvent& ev)
     // Tooltip hover tracking (also while dragging a dev knob).
     {
         int hover = -1;
-        const float mx = ev.pos.getX(), my = ev.pos.getY();
         for (int i = 0; i < kNumDevKnobs; ++i)
         {
             if (draggingCont_ == idx(kDevKnobs[i].p)
@@ -592,7 +610,7 @@ bool SirenUI::onMotion(const MotionEvent& ev)
         return false;
 
     const auto& pi = paramInfo(static_cast<Param>(draggingCont_));
-    const float dy = dragStartY_ - ev.pos.getY();
+    const float dy = dragStartY_ - my;
     const float n = std::clamp(dragStartN_ + dy / 200.f, 0.f, 1.f);
     const float v = fromNorm(pi, n);
     values_[draggingCont_] = v;

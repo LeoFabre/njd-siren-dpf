@@ -32,6 +32,7 @@ private:
     void drawRocker(float cx, float cy, bool on);
 
     int hitTest(float mx, float my) const;   // returns a Param index or -1
+    float uiScale() const;                   // window size / logical 740x700
 
     float values_[siren::kNumControlParams];
     float level_ = 0.f;
