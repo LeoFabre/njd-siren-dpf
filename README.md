@@ -34,17 +34,17 @@ from the webapp (same pattern as Dubwize's tap button).
 
 ## Front panel (params mirror the NJD faceplate)
 
-- **TONE** rotary 1/2/3 — base pitch (low/mid/high)
-- **MODE** rotary 1/2/3/4 — sweep character: tri wail / falling saw / two-tone square / hard wail
-- **SPEED** rotary 1/2/3/OFF — sweep rate 2/5/11 Hz, OFF = fixed tone
+- **TONE** rotary 1/2/3 — osc-rate ladder S5 (470k/220k/100k): low/mid/high register
+- **MODE** rotary 1/2/3/4 — S4 routing: wail / two-tone with gaps / chaos / fixed tone
+- **SPEED** rotary 1/2/3/OFF — LFO ladder S3: 1.5/3.3/7.2 Hz; OFF = LFO frozen (manual play)
 - **VOLUME** — output level
-- **TONE** button — fixed tone, no sweep (momentary)
-- **SIREN** button — siren with ~700 ms pitch wind-up (the slow LFO charge of the real unit)
-- **TRIG** button — instant siren (momentary); **OFF/ON rocker** — latched TRIG (`hold`)
-- **PWR LED** — lit by the output signal (`outLevel` output param)
+- **TONE** button — forces the fixed-pitch routing while held
+- **SIREN** button — S2: slow C5 charge (wind-up by capacitor physics)
+- **TRIG** button — S1: instant C5 slam + LFO reset; **OFF/ON rocker** — S6 latched power
+- **PWR LED** — follows C5, i.e. the sweep level (`ledLevel` output param)
 
-Fine-tune params (host/webapp only, not on the panel): `attack`, `amount`, `lfo2*`,
-`flavor`, `flavorTime`, `drive`, `sparkle`.
+Fine-tune params (host/webapp only, not on the panel): `charge`, `discharge`,
+`amount`, `drive`.
 
 The optional NanoVG UI renders the faceplate one-to-one (rotary switches click to the
 next detent, pushbuttons are momentary, the rocker latches).
