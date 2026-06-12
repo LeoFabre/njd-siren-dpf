@@ -76,13 +76,13 @@ static constexpr ParamInfo kParams[kNumControlParams + kNumOutputParams] = {
     // 11 drive
     { "drive",     "Drive",      0.0f,  12.0f,   4.0f, false, false, false, false, 0, nullptr },
     // 12 bleed
-    { "bleed",     "Mod Bleed",  0.0f, 100.0f,   0.0f, false, false, false, false, 0, nullptr },
+    { "bleed",     "Mod Bleed",  0.0f, 100.0f,  35.0f, false, false, false, false, 0, nullptr },
     // 13 capRatio
     { "capRatio",  "Cap Ratio",  0.5f,   2.0f,   1.0f, false, false, false, false, 0, nullptr },
     // 14 vbe
     { "vbe",       "Vbe",        0.3f,   1.2f,  0.65f, false, false, false, false, 0, nullptr },
     // 15 edge
-    { "edge",      "Edge LP",  500.0f, 16000.0f, 6000.0f, false, false, false, true, 0, nullptr },
+    { "edge",      "Edge LP",  500.0f, 16000.0f, 10000.0f, false, false, false, true, 0, nullptr },
     // 16 ledLevel (output)
     { "ledLevel",  "LED Level",  0.0f,   1.0f,   0.0f, false, false, true,  false, 0, nullptr },
 };

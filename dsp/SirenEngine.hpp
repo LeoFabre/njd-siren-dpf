@@ -14,7 +14,7 @@
 // rocker, here also the momentary buttons) and via this stall.
 //
 // LFO: same astable shape (T1/T2, C=10uF, rates from the S3 ladder). Its raw
-// square charges C5 (100uF) through D4/R22 (tau ~0.1 s) and C5 discharges
+// square charges C5 (100uF) through R23/D4/R22 (tau ~0.32 s) and C5 discharges
 // through R23/R24 — the "uneven triangle" shaped LFO. S1 (TRIG) fast-charges
 // C5 and resets the square; S2 (SIREN) slow-charges it through R25 (tau ~1 s).
 // The LED driver (T5) follows C5, so the panel LED breathes with the sweep.
@@ -40,13 +40,15 @@ public:
         float amount_pct   = 100.0f; // mod scale about 4.5 V (not in circuit)
         float drive_dB     = 4.0f;   // post drive (not in circuit)
         // Dev/physics trims: component tolerances of the real unit.
-        float bleed_pct    = 0.0f;   // half-A source leaking into half B's
-                                     // pull-up (R8/R9 vs ladder): duty drifts
-                                     // through more notch positions
+        float bleed_pct    = 35.0f;  // half-A source leaking into half B's
+                                     // pull-up: the clone schematic shows each
+                                     // base mixes its ladder with a 220k+diode
+                                     // path (R8/D1, R9/D2) — ~50/50 at TONE 2
         float capRatio     = 1.0f;   // C2/C1 mismatch: scales half-B period
         float vbe_V        = 0.65f;  // transistor threshold: stall point and
                                      // the shape of the dying dive
-        float edgeHz       = 6000.0f;// collector edge rounding (output LP)
+        float edgeHz       = 10000.0f;// collector edge rounding (no LP in the
+                                      // real output chain, only 2x HP 106 Hz)
     };
 
     void prepare(double sampleRate, int /*maxBlockSize*/)
@@ -56,7 +58,7 @@ public:
 
         smoothCoef_ = 1.0f - std::exp(-dt_ / 0.010f);
         rampCoef_   = 1.0f - std::exp(-dt_ / 0.002f);  // 2 ms power de-click
-        cAuto_      = 1.0f - std::exp(-dt_ / 0.100f);  // D4/R22 from the LFO
+        cAuto_      = 1.0f - std::exp(-dt_ / 0.320f);  // R23+R22 (2k2+1k) * C5
         lpCoef_     = 1.0f - std::exp(-6.2831853f * 6000.0f * dt_);
         hpCoef_     = kHpTau / (kHpTau + dt_);          // 106 Hz one-pole x2
 
