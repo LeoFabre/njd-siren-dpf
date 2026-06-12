@@ -10,7 +10,7 @@ public:
 protected:
     const char* getLabel() const override { return "Siren"; }
     const char* getDescription() const override { return "NJD-style dub siren generator"; }
-    const char* getMaker() const override { return "Nexus"; }
+    const char* getMaker() const override { return "Dubplex"; }
     const char* getLicense() const override { return "Apache-2.0"; }
     uint32_t getVersion() const override { return d_version(0,1,0); }
     int64_t getUniqueId() const override { return d_cconst('N','j','S','r'); }
