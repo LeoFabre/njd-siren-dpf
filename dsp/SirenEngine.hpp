@@ -90,7 +90,11 @@ public:
         if (fs_ <= 0.0f)
             return;
 
-        const bool effPower = p_.power || p_.trigBtn || p_.sirenBtn || p_.toneBtn;
+        // Only TRIG and the rocker provide power (they ARE the power path,
+        // like the SIREN ON switch in the V+ rail). TONE and SIREN only
+        // manipulate the routing / C5 while the unit is already powered —
+        // pressed alone they are silent, like the hardware.
+        const bool effPower = p_.power || p_.trigBtn;
         if (effPower && !prevPower_)
         {
             // Power-up: both astables restart from a known state.

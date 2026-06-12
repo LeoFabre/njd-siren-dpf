@@ -131,11 +131,29 @@ int main()
         CHECK(wMin < wMax * 0.1f, "two-tone: stall gaps present");
     }
 
-    // 6. TONE button: steady fixed pitch (constant zero-crossing rate).
+    // 5b. TONE or SIREN pressed alone (no power): silent, like the hardware
+    //     (the SIREN ON switch sits in the V+ rail; S1/S2 only touch C5).
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
+        p.toneBtn = true;
+        eng.setParameters(p);
+        const float tRms = renderRms(eng, blocksFor(0.5f), 0);
+        p.toneBtn = false;
+        p.sirenBtn = true;
+        eng.setParameters(p);
+        const float sRms = renderRms(eng, blocksFor(0.5f), 0);
+        CHECK(tRms == 0.0f, "TONE alone (unpowered) -> silence");
+        CHECK(sRms == 0.0f, "SIREN alone (unpowered) -> silence");
+    }
+
+    // 6. TONE button under power: steady fixed pitch (constant zc rate).
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.power = true;
         p.toneBtn = true;
         eng.setParameters(p);
         float bufL[kBlock], bufR[kBlock];
@@ -160,15 +178,20 @@ int main()
         CHECK(std::abs(zc[0] - zc[1]) <= 2, "tone button -> steady pitch");
     }
 
-    // 7. SIREN wind-up: the pitch climbs as C5 charges through R25 (the
-    //    wind-up is in frequency, not amplitude — the square is full level
-    //    as soon as it oscillates).
+    // 7. SIREN wind-up under a latched rocker: the pitch climbs as C5
+    //    charges through R25 (the wind-up is in frequency, not amplitude —
+    //    the square is full level as soon as it oscillates). The rocker's
+    //    initial kick is drained first.
     {
         SirenEngine eng;
         eng.prepare(kFs, kBlock);
         SirenEngine::Params p;
+        p.power = true;
         p.speed = 3;
         p.charge_s = 0.4f;
+        p.discharge_s = 0.3f;
+        eng.setParameters(p);
+        renderRms(eng, blocksFor(2.0f), 0);  // kick + drain to stall
         p.sirenBtn = true;
         eng.setParameters(p);
         float bufL[kBlock], bufR[kBlock];

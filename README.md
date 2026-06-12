@@ -22,7 +22,9 @@ not a synth recipe:
   Release = 2 ms cut, unless the rocker still holds power, in which case the
   authentic falling discharge tail sounds. SIREN = S2 (slow charge through
   R25, `charge` knob — the wind-up is capacitor physics), TONE = forces the
-  fixed-pitch routing (D1/D2/R8/R9, ~330 Hz at TONE 2).
+  fixed-pitch routing (D1/D2/R8/R9, ~330 Hz at TONE 2). TONE and SIREN do NOT
+  power the unit: pressed alone (rocker off, TRIG up) they are silent, like
+  the hardware — only TRIG and the rocker sit in the power path.
 - **MODE** routes the sources onto the two halves: 1 wail (shaped/fixed),
   2 two-tone with stall gaps (square/fixed), 3 chaos (shaped/square), 4 fixed.
 - **Output**: 2x one-pole 106 Hz HP (C9/R26, C8/R27), 6 kHz edge rounding,
@@ -40,8 +42,8 @@ from the webapp (same pattern as Dubwize's tap button).
 - **MODE** rotary 1/2/3/4 — S4 routing: wail / two-tone with gaps / chaos / fixed tone
 - **SPEED** rotary 1/2/3/OFF — LFO ladder S3: 1.5/3.3/7.2 Hz; OFF = LFO frozen (manual play)
 - **VOLUME** — output level
-- **TONE** button — forces the fixed-pitch routing while held
-- **SIREN** button — S2: slow C5 charge (wind-up by capacitor physics)
+- **TONE** button — forces the fixed-pitch routing while held (silent unless powered)
+- **SIREN** button — S2: slow C5 charge, wind-up by capacitor physics (silent unless powered)
 - **TRIG** button — power + C5 slam + LFO reset on press; **OFF/ON rocker** — latched TRIG (identical)
 - **PWR LED** — follows C5, i.e. the sweep level (`ledLevel` output param)
 
