@@ -38,6 +38,7 @@ private:
     int   pressedBtn_ = -1;   // param index of the held pushbutton
     int   draggingCont_ = -1; // param index of the dragged continuous knob
     int   draggingSel_ = -1;  // param index of the dragged rotary switch
+    int   hoverDev_ = -1;     // dev-knob LIST index under the mouse (tooltip)
     int   dragStartPos_ = 0;
     float dragStartY_ = 0.f;
     float dragStartN_ = 0.f;

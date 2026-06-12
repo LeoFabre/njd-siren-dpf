@@ -16,5 +16,6 @@
 #define DISTRHO_PLUGIN_WANT_MIDI_INPUT 0   /* trigger arrives as a CC->param mapping in Sushi */
 
 #define DISTRHO_UI_USE_NANOVG     1
+#define DISTRHO_UI_USER_RESIZABLE 1
 #define DISTRHO_UI_DEFAULT_WIDTH  740
 #define DISTRHO_UI_DEFAULT_HEIGHT 700

@@ -28,14 +28,14 @@ static constexpr float kRockX = 612.f,  kRockY = 470.f;
 static constexpr float kKnobR = 50.f;
 
 // Dev strip: physics trims to hunt the real unit's character by ear.
-struct DevKnobDef { Param p; const char* label; };
+struct DevKnobDef { Param p; const char* label; const char* unit; };
 static const DevKnobDef kDevKnobs[] = {
-    { Param::bleed,     "BLEED"  },
-    { Param::capRatio,  "C2/C1"  },
-    { Param::vbe,       "VBE"    },
-    { Param::edge,      "EDGE"   },
-    { Param::discharge, "DISCHG" },
-    { Param::amount,    "AMOUNT" },
+    { Param::bleed,     "BLEED",  "%"  },
+    { Param::capRatio,  "C2/C1",  "x"  },
+    { Param::vbe,       "VBE",    "V"  },
+    { Param::edge,      "EDGE",   "Hz" },
+    { Param::discharge, "DISCHG", "s"  },
+    { Param::amount,    "AMOUNT", "%"  },
 };
 static constexpr int kNumDevKnobs = 6;
 static constexpr float kDevY = 640.f;
@@ -70,7 +70,10 @@ static float detentAngleDeg(int pos, int numPos)
 SirenUI::SirenUI() : UI((uint)kWidth, (uint)kHeight)
 {
     setSize((uint)kWidth, (uint)kHeight);
-    setGeometryConstraints((uint)kWidth, (uint)kHeight, false);
+    // Resizable window: enlarging scales the whole faceplate uniformly (the
+    // minimum IS the logical drawing space; DGL maps mouse events back to it).
+    setGeometryConstraints((uint)kWidth, (uint)kHeight,
+                           /*keepAspectRatio=*/true, /*automaticallyScale=*/true);
 
     for (int i = 0; i < kNumControlParams; ++i)
         values_[i] = paramInfo(static_cast<Param>(i)).def;
@@ -155,6 +158,37 @@ void SirenUI::onNanoDisplay()
     text(28.f, 616.f, "DEV — physics trims", nullptr);
     for (int i = 0; i < kNumDevKnobs; ++i)
         drawDevKnob(devKnobX(i), kDevY, idx(kDevKnobs[i].p), kDevKnobs[i].label);
+
+    // Hover/drag tooltip with a readable value.
+    if (hoverDev_ >= 0 && hoverDev_ < kNumDevKnobs)
+    {
+        const DevKnobDef& k = kDevKnobs[hoverDev_];
+        const float v = values_[idx(k.p)];
+        char buf[48];
+        if (v >= 1000.f)
+            std::snprintf(buf, sizeof(buf), "%s  %.0f %s", k.label, (double) v, k.unit);
+        else
+            std::snprintf(buf, sizeof(buf), "%s  %.2f %s", k.label, (double) v, k.unit);
+
+        fontSize(15.f);
+        textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
+        DGL_NAMESPACE::Rectangle<float> bounds;
+        textBounds(0.f, 0.f, buf, nullptr, bounds);
+        const float tw = bounds.getWidth() + 16.f;
+        const float thh = 26.f;
+        float tx = devKnobX(hoverDev_);
+        tx = std::clamp(tx, 14.f + tw * 0.5f, kWidth - 14.f - tw * 0.5f);
+        const float ty = kDevY - kDevR - 24.f;
+
+        beginPath();
+        roundedRect(tx - tw * 0.5f, ty - thh * 0.5f, tw, thh, 5.f);
+        fillColor(Color(20, 20, 18, 0.92f));
+        fill();
+        strokeColor(rgb(0x6f6a61));
+        stroke();
+        fillColor(rgb(0xf0ead9));
+        text(tx, ty, buf, nullptr);
+    }
 }
 
 void SirenUI::drawDevKnob(float cx, float cy, int paramIdx, const char* label)
@@ -530,6 +564,28 @@ bool SirenUI::onMotion(const MotionEvent& ev)
             repaint();
         }
         return true;
+    }
+
+    // Tooltip hover tracking (also while dragging a dev knob).
+    {
+        int hover = -1;
+        const float mx = ev.pos.getX(), my = ev.pos.getY();
+        for (int i = 0; i < kNumDevKnobs; ++i)
+        {
+            if (draggingCont_ == idx(kDevKnobs[i].p)
+                || (draggingCont_ < 0 && draggingSel_ < 0
+                    && (mx - devKnobX(i)) * (mx - devKnobX(i))
+                       + (my - kDevY) * (my - kDevY) <= (kDevR + 6.f) * (kDevR + 6.f)))
+            {
+                hover = i;
+                break;
+            }
+        }
+        if (hover != hoverDev_)
+        {
+            hoverDev_ = hover;
+            repaint();
+        }
     }
 
     if (draggingCont_ < 0)
