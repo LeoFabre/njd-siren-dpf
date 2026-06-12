@@ -93,8 +93,10 @@ int main()
         p.speed = 3;
         p.discharge_s = 0.5f;
         eng.setParameters(p);
-        const float idle = renderRms(eng, blocksFor(1.0f), blocksFor(0.3f));
-        CHECK(idle < 1e-3f, "rocker on, C5 empty -> stalled, silent");
+        const float attack = renderRms(eng, blocksFor(0.3f), blocksFor(0.02f));
+        CHECK(attack > 0.03f, "rocker on -> S1 kick sounds (same as TRIG)");
+        const float idle = renderRms(eng, blocksFor(3.0f), blocksFor(2.5f));
+        CHECK(idle < 1e-3f, "...then C5 drains: stalled, silent");
 
         p.trigBtn = true;
         eng.setParameters(p);
@@ -188,6 +190,32 @@ int main()
         std::printf("      windup zc: early=%d late=%d (f0 ~%d -> ~%d Hz)\n",
                     zcEarly, zcLate, zcEarly * 5, zcLate * 5);
         CHECK(zcLate > zcEarly * 3 / 2, "SIREN wind-up: pitch climbs with C5 charge");
+    }
+
+    // 8. TRIG and the rocker are the same control: holding either from a
+    //    fresh engine must produce bit-identical output.
+    {
+        SirenEngine engT, engR;
+        engT.prepare(kFs, kBlock);
+        engR.prepare(kFs, kBlock);
+        SirenEngine::Params pT, pR;
+        pT.trigBtn = true;
+        pR.power = true;
+        engT.setParameters(pT);
+        engR.setParameters(pR);
+        float tL[kBlock], tR[kBlock], rL[kBlock], rR[kBlock];
+        float* bufsT[2] = { tL, tR };
+        float* bufsR[2] = { rL, rR };
+        float maxDiff = 0.0f;
+        for (int b = 0; b < blocksFor(1.5f); ++b)
+        {
+            for (int i = 0; i < kBlock; ++i) { tL[i]=tR[i]=rL[i]=rR[i]=0.0f; }
+            engT.process(bufsT, 2, kBlock);
+            engR.process(bufsR, 2, kBlock);
+            for (int i = 0; i < kBlock; ++i)
+                maxDiff = std::max(maxDiff, std::fabs(tL[i] - rL[i]));
+        }
+        CHECK(maxDiff == 0.0f, "TRIG and rocker are bit-identical");
     }
 
     std::printf(failures == 0 ? "ALL OK\n" : "%d FAILURE(S)\n", failures);

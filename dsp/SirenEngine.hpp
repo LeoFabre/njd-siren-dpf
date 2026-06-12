@@ -27,10 +27,10 @@ namespace siren {
 class SirenEngine {
 public:
     struct Params {
-        bool  trigBtn  = false;  // S1: fast-charge C5 + reset the LFO square
+        bool  trigBtn  = false;  // momentary TRIG: power + S1 kick on press
         bool  sirenBtn = false;  // S2: slow-charge C5 through R25
         bool  toneBtn  = false;  // force fixed-pitch routing (D1/D2/R8/R9)
-        bool  power    = false;  // S6 rocker; held buttons also power the unit
+        bool  power    = false;  // rocker = latched TRIG (identical behavior)
         int   tone     = 1;      // S5 osc-rate ladder index (470k/220k/100k)
         int   mode     = 0;      // S4 modulation routing, see kRoute
         int   speed    = 1;      // S3 lfo-rate ladder (47k/22k/10k), 3 = OFF
@@ -48,7 +48,6 @@ public:
 
         smoothCoef_ = 1.0f - std::exp(-dt_ / 0.010f);
         rampCoef_   = 1.0f - std::exp(-dt_ / 0.002f);  // 2 ms power de-click
-        cFast_      = 1.0f - std::exp(-dt_ / 0.010f);  // S1 direct charge
         cAuto_      = 1.0f - std::exp(-dt_ / 0.100f);  // D4/R22 from the LFO
         lpCoef_     = 1.0f - std::exp(-6.2831853f * 6000.0f * dt_);
         hpCoef_     = kHpTau / (kHpTau + dt_);          // 106 Hz one-pole x2
@@ -62,6 +61,8 @@ public:
         ramp_ = 0.0f;
         led_ = 0.0f;
         prevPower_ = false;
+        prevTrigBtn_ = false;
+        prevPowerSw_ = false;
         hp1x_ = hp1y_ = hp2x_ = hp2y_ = lpY_ = 0.0f;
 
         amountS_ = p_.amount_pct / 100.0f;
@@ -90,6 +91,19 @@ public:
         }
         prevPower_ = effPower;
 
+        // TRIG and the rocker are the SAME control (the rocker is a latched
+        // TRIG): on activation, S1 slams C5 to the rail and resets the LFO
+        // square; afterwards the unit runs free. Tapping TRIG while the
+        // rocker holds power re-fires the kick.
+        if ((p_.trigBtn && !prevTrigBtn_) || (p_.power && !prevPowerSw_))
+        {
+            vC5_ = kVmax;
+            sqHigh_ = true;
+            lfoT_ = 0.0f;
+        }
+        prevTrigBtn_ = p_.trigBtn;
+        prevPowerSw_ = p_.power;
+
         const bool speedOn = p_.speed < 3;
         const float tLfoHalf = kLfoHalf[std::clamp(p_.speed, 0, 2)];
         const float Rosc = kRosc[std::clamp(p_.tone, 0, 2)];
@@ -115,24 +129,15 @@ public:
             // ---- LFO square astable -------------------------------------
             if (speedOn && effPower)
             {
-                if (p_.trigBtn)
-                {
-                    sqHigh_ = true;   // S1/D3 holds the astable
-                    lfoT_ = 0.0f;
-                }
-                else
-                {
-                    lfoT_ += dt_;
-                    if (lfoT_ >= tLfoHalf) { lfoT_ -= tLfoHalf; sqHigh_ = !sqHigh_; }
-                }
+                lfoT_ += dt_;
+                if (lfoT_ >= tLfoHalf) { lfoT_ -= tLfoHalf; sqHigh_ = !sqHigh_; }
             }
             else
                 sqHigh_ = false;      // SPEED off / unpowered: no charge path
 
             // ---- C5 (shaped LFO) ----------------------------------------
             float target, coef;
-            if (p_.trigBtn && effPower)        { target = kVmax; coef = cFast_; }
-            else if (sqHigh_)                  { target = kVmax; coef = cAuto_; }
+            if (sqHigh_)                       { target = kVmax; coef = cAuto_; }
             else if (p_.sirenBtn && effPower)  { target = kVmax; coef = cSlow; }
             else { target = 0.0f; coef = (effPower && speedOn) ? cDisAuto : cDisMan; }
             vC5_ += coef * (target - vC5_);
@@ -230,10 +235,11 @@ private:
     float oscZ_ = 1.0f;
 
     bool  prevPower_ = false;
+    bool  prevTrigBtn_ = false, prevPowerSw_ = false;
     float ramp_ = 0.0f, led_ = 0.0f;
 
     float hp1x_ = 0, hp1y_ = 0, hp2x_ = 0, hp2y_ = 0, lpY_ = 0;
-    float smoothCoef_ = 0, rampCoef_ = 0, cFast_ = 0, cAuto_ = 0;
+    float smoothCoef_ = 0, rampCoef_ = 0, cAuto_ = 0;
     float lpCoef_ = 0, hpCoef_ = 0;
     float amountS_ = 1.0f, volS_ = 0.5f;
 };

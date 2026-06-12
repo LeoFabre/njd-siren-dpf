@@ -16,11 +16,13 @@ not a synth recipe:
   through D4/R22 (~0.1 s); C5 discharges through R23/R24 (`discharge` knob) —
   the shaped "uneven triangle". SPEED OFF freezes the LFO: the siren chokes at
   rest and is played with the buttons.
-- **Buttons**: TRIG = S1 (fast-charge C5 + LFO reset), SIREN = S2 (slow charge
-  through R25, `charge` knob — the wind-up is capacitor physics), TONE = forces
-  the fixed-pitch routing (D1/D2/R8/R9, ~330 Hz at TONE 2). Rocker = S6 power,
-  latched; buttons power the unit while held (release = 2 ms cut). With the
-  rocker ON, releasing TRIG leaves the authentic falling discharge tail.
+- **Buttons**: TRIG and the OFF/ON rocker are the SAME control (rocker =
+  latched TRIG): on activation they power the unit, slam C5 (S1/D4) and reset
+  the LFO square, then the unit runs free — holding TRIG plays the full siren.
+  Release = 2 ms cut, unless the rocker still holds power, in which case the
+  authentic falling discharge tail sounds. SIREN = S2 (slow charge through
+  R25, `charge` knob — the wind-up is capacitor physics), TONE = forces the
+  fixed-pitch routing (D1/D2/R8/R9, ~330 Hz at TONE 2).
 - **MODE** routes the sources onto the two halves: 1 wail (shaped/fixed),
   2 two-tone with stall gaps (square/fixed), 3 chaos (shaped/square), 4 fixed.
 - **Output**: 2x one-pole 106 Hz HP (C9/R26, C8/R27), 6 kHz edge rounding,
@@ -40,7 +42,7 @@ from the webapp (same pattern as Dubwize's tap button).
 - **VOLUME** — output level
 - **TONE** button — forces the fixed-pitch routing while held
 - **SIREN** button — S2: slow C5 charge (wind-up by capacitor physics)
-- **TRIG** button — S1: instant C5 slam + LFO reset; **OFF/ON rocker** — S6 latched power
+- **TRIG** button — power + C5 slam + LFO reset on press; **OFF/ON rocker** — latched TRIG (identical)
 - **PWR LED** — follows C5, i.e. the sweep level (`ledLevel` output param)
 
 Fine-tune params (host/webapp only, not on the panel): `charge`, `discharge`,
