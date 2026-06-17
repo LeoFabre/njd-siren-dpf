@@ -59,7 +59,7 @@ public:
                                      // the shape of the dying dive
         float edgeHz       = 10000.0f;// collector edge rounding (no LP in the
                                       // real output chain, only 2x HP 106 Hz)
-        int   oversample   = 1;      // 1/2/4 anti-alias factor for osc+tanh
+        int   oversample   = 1;      // 1/2/4/8 anti-alias factor for osc+tanh
         // Collector-waveform model (circuit-faithful generator).
         int   model        = 0;      // 0 = Classic (square+polyBLEP), 1 = Physical
         float collTau_us   = 45.0f;  // tau_c: collector recovery (Rc*Ccouple), us
