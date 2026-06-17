@@ -1,8 +1,26 @@
 # NJD Siren — collector-waveform oscillator model (design)
 
 Date: 2026-06-17
-Status: design approved, pre-implementation
+Status: design approved; **revised 2026-06-18** (see Revision note)
 Scope: `plugins/njd-siren-dpf` (DPF VST3/LV2/standalone), engine `dsp/SirenEngine.hpp`
+
+## Revision 2026-06-18 — collector model is warmth/anti-alias, NOT the vowel
+
+Empirically disproven during implementation: the collector-RC waveform does **not**
+produce the dying vowel. A first-order RC charge/discharge has a **monotonic spectral
+roll-off**, not a **resonant peak** — and a vowel requires resonant formant peaks.
+Measured (Classic vs Physical across the descent, full τ sweep): Physical's spectral
+centroid is uniformly **lower** (darker/warmer) and its 400–1400 Hz energy fraction is
+always **≤** Classic's — never a formant. The original "two fixed corners → two
+formants" reasoning conflated a roll-off knee with a resonant peak.
+
+**Therefore:** the collector model is kept and finished for what it actually delivers —
+**warmth + de-aliasing without polyBLEP** (the "digital in the highs" complaint). The
+**vowel is deferred** to a separate effort: it most plausibly comes from the
+**loudspeaker/cabinet resonance** of the real unit (an always-on physical formant
+filter downstream of the PCB — the physically-correct version of the rejected gated
+trick). The sections below describing the vowel emerging from the collector are
+**superseded** by this note; read them as the (warmth-only) generator design.
 
 ## Problem
 

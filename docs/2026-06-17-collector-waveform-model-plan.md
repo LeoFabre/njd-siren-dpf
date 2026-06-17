@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a circuit-faithful "Physical" oscillator mode to the NJD siren that models the transistor collector waveform (finite-slew exponentials), so the analog timbre and dying-tail vowel emerge from the model instead of an idealized square + polyBLEP — switchable against the current "Classic" path.
+**Goal:** Add a circuit-faithful "Physical" oscillator mode to the NJD siren that models the transistor collector waveform (finite-slew exponentials), giving a warmer/de-aliased timbre without polyBLEP — switchable against the current "Classic" path. (Revised 2026-06-18: this model delivers warmth + anti-alias, NOT the dying vowel — the vowel needs a resonance and is deferred to a separate loudspeaker-resonance effort. See the design doc Revision note.)
 
 **Architecture:** A `Model` param selects, inside `genSample`, between the existing band-limited square (Classic, kept bit-identical) and a new collector-voltage state generator (Physical). In Physical the waveform is band-limited by physics (finite `τc` recovery and `τ_fall` turn-on time constants) + the existing oversampling/FIR-decimator, with no polyBLEP. Time constants are behavioral and adjustable.
 
@@ -233,32 +233,36 @@ git commit -m "siren: collector-waveform Physical oscillator model behind Model 
 
 ---
 
-### Task 2: Engine — formant-emergence test (Physical vs Classic)
+### Task 2: Engine — warmth test (Physical is darker than Classic)
 
-Proves the mechanism: during the dying tail the fixed `τc`/`τ_fall` corners make Physical concentrate **more** energy in the formant band than Classic. Robust because it is a Classic-vs-Physical relative comparison, not an absolute threshold.
+> Revised 2026-06-18: the original formant-emergence test was dropped — the collector-RC
+> model produces a monotonic roll-off (warmth), not a resonant formant, so it cannot pass a
+> "vowel emerges" gate (measured: Physical's mid-band fraction is always ≤ Classic's). This
+> task instead validates what the model actually does: it is **darker/warmer** than Classic
+> (lower spectral centroid) during the death — the de-aliasing / edge-rounding effect.
 
 **Files:**
 - Test: `test/test_siren_engine.cpp`
 
-- [ ] **Step 1: Add a small Goertzel band-energy helper**
+- [ ] **Step 1: Add a Goertzel spectral-centroid helper + a death-render helper**
 
-Near the top of `test/test_siren_engine.cpp`, after the `blocksFor` helper, add:
+Add `#include <vector>` to the includes at the top of `test/test_siren_engine.cpp`. Then, after the `blocksFor` helper, add:
 
 ```cpp
-// Single-bin power via Goertzel, summed over a frequency band, on a window of
-// `n` samples ending at the current render position.
-static double bandPower(const float* x, int n, float f0, float f1, float step)
+// Spectral centroid (Hz) over a frequency grid via Goertzel, on `n` samples.
+static double spectralCentroid(const float* x, int n, float f0, float f1, float step)
 {
-    double total = 0.0;
+    double num = 0.0, den = 0.0;
     for (float f = f0; f <= f1; f += step)
     {
         const double w = 2.0 * M_PI * f / kFs;
         const double c = 2.0 * std::cos(w);
         double s0 = 0, s1 = 0, s2 = 0;
         for (int i = 0; i < n; ++i) { s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
-        total += s1 * s1 + s2 * s2 - c * s1 * s2;
+        const double p = s1 * s1 + s2 * s2 - c * s1 * s2;
+        num += (double) f * p; den += p;
     }
-    return total;
+    return num / (den + 1e-20);
 }
 
 // Render the death tail (SPEED off, hold TONE 0.6 s then release) into `out`.
@@ -280,15 +284,16 @@ static void renderDeath(SirenEngine::Params base, std::vector<float>& out, float
 }
 ```
 
-Add `#include <vector>` to the includes at the top of the file.
-
-- [ ] **Step 2: Add the failing formant test**
+- [ ] **Step 2: Add the warmth test**
 
 Append before the final `std::printf(failures...)`:
 
 ```cpp
-    // 13. Formant emergence: in the late death, Physical concentrates a larger
-    //     fraction of energy in the 400-1400 Hz formant band than Classic.
+    // 13. Warmth: the Physical collector model is darker than Classic during the
+    //     death (lower spectral centroid) — it rounds the edge / de-aliases
+    //     instead of emitting an idealized square. It does NOT add a vowel
+    //     formant (a first-order RC is roll-off, not resonance — see the design
+    //     doc Revision 2026-06-18).
     {
         SirenEngine::Params base; base.power = true; base.speed = 3;
         base.tone = 1; base.discharge_s = 3.0f; base.oversample = 4;
@@ -296,30 +301,25 @@ Append before the final `std::printf(failures...)`:
         base.model = 0; renderDeath(base, classic, 4.0f);
         base.model = 1; renderDeath(base, physical, 4.0f);
 
-        const int N = 8192, st = (int)(2.6f * kFs);   // deep in the death
-        auto frac = [&](const std::vector<float>& v) {
-            const float* w = v.data() + st;
-            double band = bandPower(w, N, 400.f, 1400.f, 50.f);
-            double tot  = bandPower(w, N, 80.f, 8000.f, 50.f);
-            return band / (tot + 1e-20);
-        };
-        const double fc = frac(classic), fp = frac(physical);
-        std::printf("      death formant frac: classic=%.2f physical=%.2f\n", fc, fp);
-        CHECK(fp > fc * 1.15, "physical: formant band emphasized in death vs classic");
+        const int N = 4096, st = (int)(1.5f * kFs);   // mid-descent
+        const double cc = spectralCentroid(classic.data()  + st, N, 80.f, 8000.f, 50.f);
+        const double cp = spectralCentroid(physical.data() + st, N, 80.f, 8000.f, 50.f);
+        std::printf("      death centroid: classic=%.0f physical=%.0f Hz\n", cc, cp);
+        CHECK(cp < cc * 0.97, "physical: warmer/darker than classic (collector roll-off)");
     }
 ```
 
-- [ ] **Step 3: Run to verify it fails (or passes) and inspect the printed fractions**
+- [ ] **Step 3: Run to verify it passes**
 
 Run: `cd plugins/njd-siren-dpf && c++ -std=c++20 -O2 -I dsp -I plugin test/test_siren_engine.cpp -o /tmp/test_siren && /tmp/test_siren`
-Expected: the `death formant frac` line prints two numbers. If `physical` is not at least 1.15× `classic`, the model needs tuning — adjust `collTau_us`/`fallTau_us` defaults in Task 1 Step 3 (try `collTau_us` 50–60, `fallTau_us` 8–10) and re-run until the assert passes. This is the design's validation gate.
+Expected: the `death centroid` line prints two numbers with `physical` clearly below `classic` (≈ 5–7% lower; measured ~413 vs ~443 Hz), the case passes, and the suite ends `ALL OK`. If the centroids are equal, the Physical branch isn't actually engaging — check `model`/`oversample` plumbing. Do NOT loosen the `0.97` factor to force a pass.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 cd plugins/njd-siren-dpf
 git add test/test_siren_engine.cpp
-git commit -m "siren: test formant emerges in Physical death vs Classic"
+git commit -m "siren: test Physical collector model is warmer/darker than Classic"
 ```
 
 ---
@@ -571,9 +571,9 @@ In `test/render_proto.cpp`, inside `main()` after the existing `dying_tail.wav` 
 Run: `cd plugins/njd-siren-dpf && c++ -std=c++20 -O2 -I dsp -I plugin test/render_proto.cpp -o /tmp/render_proto && /tmp/render_proto`
 Expected: writes `death_classic.wav` and `death_physical.wav` (plus the alias/dying WAVs) to `/tmp/siren-proto/`.
 
-- [ ] **Step 3: FFT-inspect that fixed formants emerge and harmonics sweep beneath**
+- [ ] **Step 3: FFT-inspect that Physical is warmer and aliases no worse**
 
-Reuse `/tmp/measure_alias.cpp` (built earlier in the session) or rebuild it:
+(Revised 2026-06-18: do NOT look for emergent formants — the collector model gives a roll-off, not a resonance. Confirm instead that Physical is darker (lower centroid, per Task 2) and does not alias worse than Classic.) Reuse `/tmp/measure_alias.cpp` (built earlier in the session) or rebuild it:
 `c++ -std=c++17 -O2 /tmp/measure_alias.cpp -o /tmp/measure_alias`
 Run on a high note rendered in each model (set `p.toneBtn=true`, `p.tone=2` for a sustained note in a scratch render) and confirm Physical aliases no worse than Classic:
 `/tmp/measure_alias /tmp/siren-proto/death_classic.wav /tmp/siren-proto/death_physical.wav`
