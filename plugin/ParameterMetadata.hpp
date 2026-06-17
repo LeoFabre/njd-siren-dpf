@@ -23,12 +23,17 @@ enum class Param : uint32_t {
     capRatio,    // C2/C1 mismatch
     vbe,         // transistor threshold (stall point / dive shape)
     edge,        // collector edge rounding (output LP)
+    // Anti-alias + circuit-faithful generator
+    oversample,  // 0=1x, 1=2x, 2=4x, 3=8x
+    model,       // 0 = Classic (square+polyBLEP), 1 = Physical (collector)
+    collTau,     // tau_c collector recovery (us), Physical only
+    fallTau,     // tau_fall turn-on fall (us), Physical only
     // Output params
     ledLevel,    // T5/LED1: follows C5 (the sweep), drives the panel LED
 };
 
 constexpr int kNumPanelParams   = 8;
-constexpr int kNumControlParams = 16;
+constexpr int kNumControlParams = 20;
 constexpr int kNumOutputParams  = 1;
 
 struct ParamInfo {
@@ -48,6 +53,8 @@ struct ParamInfo {
 static const char* kChoicesTone[]  = { "1", "2", "3" };
 static const char* kChoicesMode[]  = { "1", "2", "3", "4" };
 static const char* kChoicesSpeed[] = { "1", "2", "3", "OFF" };
+static const char* kChoicesOS[]    = { "1x", "2x", "4x", "8x" };
+static const char* kChoicesModel[] = { "Classic", "Physical" };
 
 // Ordering must exactly match enum class Param above.
 static constexpr ParamInfo kParams[kNumControlParams + kNumOutputParams] = {
@@ -83,7 +90,15 @@ static constexpr ParamInfo kParams[kNumControlParams + kNumOutputParams] = {
     { "vbe",       "Vbe",        0.3f,   1.2f,  0.65f, false, false, false, false, 0, nullptr },
     // 15 edge
     { "edge",      "Edge LP",  500.0f, 16000.0f, 10000.0f, false, false, false, true, 0, nullptr },
-    // 16 ledLevel (output)
+    // 16 oversample (0=1x, 1=2x, 2=4x, 3=8x)
+    { "oversample","Oversample", 0.0f,  3.0f,    0.0f, false, true,  false, false, 4, kChoicesOS },
+    // 17 model (0=Classic, 1=Physical)
+    { "model",     "Model",      0.0f,  1.0f,    0.0f, false, true,  false, false, 2, kChoicesModel },
+    // 18 collTau (us)
+    { "collTau",   "Coll Tau",  10.0f, 120.0f,  45.0f, false, false, false, false, 0, nullptr },
+    // 19 fallTau (us)
+    { "fallTau",   "Fall Tau",   2.0f,  60.0f,  12.0f, false, false, false, false, 0, nullptr },
+    // 20 ledLevel (output)
     { "ledLevel",  "LED Level",  0.0f,   1.0f,   0.0f, false, false, true,  false, 0, nullptr },
 };
 

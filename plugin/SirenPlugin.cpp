@@ -102,6 +102,11 @@ void SirenPlugin::run(const float** inputs, float** outputs, uint32_t frames)
             .capRatio     = params_[idx(Param::capRatio)],
             .vbe_V        = params_[idx(Param::vbe)],
             .edgeHz       = params_[idx(Param::edge)],
+            // 0=1x .. 3=8x  ->  factor 1/2/4/8
+            .oversample   = 1 << (int) params_[idx(Param::oversample)],
+            .model        = (int) params_[idx(Param::model)],
+            .collTau_us   = params_[idx(Param::collTau)],
+            .fallTau_us   = params_[idx(Param::fallTau)],
         };
         engine_.setParameters(p);
         requiresUpdate_ = false;
