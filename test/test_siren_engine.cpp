@@ -241,6 +241,73 @@ int main()
         CHECK(maxDiff == 0.0f, "TRIG and rocker are bit-identical");
     }
 
+    // 9. Physical model: finite, bounded, audible under power.
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.power = true; p.model = 1; p.oversample = 4;
+        eng.setParameters(p);
+        const float rms = renderRms(eng, blocksFor(3.0f), blocksFor(0.5f));
+        CHECK(std::isfinite(rms), "physical: finite output");
+        CHECK(rms > 0.02f, "physical: audible level");
+        CHECK(rms < 1.5f,  "physical: bounded level");
+    }
+
+    // 10. Physical model: no ideal discontinuity. The band-limited collector
+    //     waveform must never jump a full square step (2.0) in one sample.
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.power = true; p.model = 1; p.oversample = 4; p.toneBtn = true;
+        eng.setParameters(p);
+        float bufL[kBlock], bufR[kBlock]; float* bufs[2] = { bufL, bufR };
+        float prev = 0.0f, maxJump = 0.0f; bool first = true;
+        for (int b = 0; b < blocksFor(1.0f); ++b)
+        {
+            for (int i = 0; i < kBlock; ++i) { bufL[i] = 0.0f; bufR[i] = 0.0f; }
+            eng.process(bufs, 2, kBlock);
+            if (b < blocksFor(0.2f)) { prev = bufL[kBlock-1]; continue; } // settle
+            for (int i = 0; i < kBlock; ++i)
+            {
+                if (!first) maxJump = std::max(maxJump, std::fabs(bufL[i] - prev));
+                prev = bufL[i]; first = false;
+            }
+        }
+        std::printf("      physical max |delta| = %.3f\n", maxJump);
+        CHECK(maxJump < 1.5f, "physical: edge softened (no ideal square jump)");
+    }
+
+    // 11. Physical model: stall is still silent (C5 empty, SPEED off, no kick).
+    {
+        SirenEngine eng;
+        eng.prepare(kFs, kBlock);
+        SirenEngine::Params p;
+        p.power = true; p.model = 1; p.oversample = 4; p.speed = 3;
+        eng.setParameters(p);
+        const float idle = renderRms(eng, blocksFor(1.0f), blocksFor(0.2f));
+        CHECK(idle < 2e-3f, "physical: stalled -> silent");
+    }
+
+    // 12. Classic stays bit-identical to a fresh reference (model defaults to 0).
+    {
+        SirenEngine a, bb;
+        a.prepare(kFs, kBlock); bb.prepare(kFs, kBlock);
+        SirenEngine::Params pa, pb; pa.power = true; pb.power = true; pb.model = 0;
+        a.setParameters(pa); bb.setParameters(pb);
+        float aL[kBlock], aR[kBlock], bL[kBlock], bR[kBlock];
+        float* ab[2] = { aL, aR }; float* bbf[2] = { bL, bR };
+        float maxDiff = 0.0f;
+        for (int b = 0; b < blocksFor(1.0f); ++b)
+        {
+            for (int i = 0; i < kBlock; ++i) { aL[i]=aR[i]=bL[i]=bR[i]=0.0f; }
+            a.process(ab, 2, kBlock); bb.process(bbf, 2, kBlock);
+            for (int i = 0; i < kBlock; ++i) maxDiff = std::max(maxDiff, std::fabs(aL[i]-bL[i]));
+        }
+        CHECK(maxDiff == 0.0f, "classic default unchanged");
+    }
+
     std::printf(failures == 0 ? "ALL OK\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
 }
