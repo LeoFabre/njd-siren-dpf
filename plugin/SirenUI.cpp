@@ -30,17 +30,21 @@ static constexpr float kKnobR = 50.f;
 // Dev strip: physics trims to hunt the real unit's character by ear.
 struct DevKnobDef { Param p; const char* label; const char* unit; };
 static const DevKnobDef kDevKnobs[] = {
-    { Param::bleed,     "BLEED",  "%"  },
-    { Param::capRatio,  "C2/C1",  "x"  },
-    { Param::vbe,       "VBE",    "V"  },
-    { Param::edge,      "EDGE",   "Hz" },
-    { Param::discharge, "DISCHG", "s"  },
-    { Param::amount,    "AMOUNT", "%"  },
+    { Param::bleed,      "BLEED",  "%"  },
+    { Param::capRatio,   "C2/C1",  "x"  },
+    { Param::vbe,        "VBE",    "V"  },
+    { Param::edge,       "EDGE",   "Hz" },
+    { Param::discharge,  "DISCHG", "s"  },
+    { Param::amount,     "AMOUNT", "%"  },
+    { Param::oversample, "OVSMP",  "x"  },   // anti-alias 1x/2x/4x/8x
+    { Param::model,      "MODEL",  ""   },   // Classic / Physical
+    { Param::collTau,    "COLL",   "us" },   // tau_c (Physical)
+    { Param::fallTau,    "FALL",   "us" },   // tau_fall (Physical)
 };
-static constexpr int kNumDevKnobs = 6;
+static constexpr int kNumDevKnobs = 10;
 static constexpr float kDevY = 640.f;
-static constexpr float kDevR = 16.f;
-static inline float devKnobX(int i) { return 95.f + 110.f * (float) i; }
+static constexpr float kDevR = 14.f;
+static inline float devKnobX(int i) { return 48.f + 72.f * (float) i; }
 
 static float toNorm(const siren::ParamInfo& pi, float v)
 {
@@ -225,7 +229,12 @@ void SirenUI::drawDevKnob(float cx, float cy, int paramIdx, const char* label)
     strokeWidth(1.f);
 
     char buf[32];
-    if (pi.max >= 1000.f)
+    if (paramIdx == idx(Param::model))
+        std::snprintf(buf, sizeof(buf), "%s",
+                      (int) values_[paramIdx] == 0 ? "CLAS" : "PHYS");
+    else if (paramIdx == idx(Param::oversample))
+        std::snprintf(buf, sizeof(buf), "%dx", 1 << (int) values_[paramIdx]);
+    else if (pi.max >= 1000.f)
         std::snprintf(buf, sizeof(buf), "%.0f", (double) values_[paramIdx]);
     else
         std::snprintf(buf, sizeof(buf), "%.2f", (double) values_[paramIdx]);
@@ -518,7 +527,8 @@ bool SirenUI::onMouse(const MouseEvent& ev)
         if (i < 0)
             return false;
 
-        if (i == idx(Param::tone) || i == idx(Param::mode) || i == idx(Param::speed))
+        if (i == idx(Param::tone) || i == idx(Param::mode) || i == idx(Param::speed)
+            || i == idx(Param::oversample) || i == idx(Param::model))
         {
             // Detented knob: drag up/down to step through the positions.
             draggingSel_ = i;
