@@ -5,6 +5,7 @@
 #include "SirenEngine.hpp"
 #include <cstdio>
 #include <cmath>
+#include <vector>
 
 using siren::SirenEngine;
 
@@ -41,6 +42,40 @@ static float renderRms(SirenEngine& eng, int numBlocks, int skipBlocks)
 }
 
 static int blocksFor(float seconds) { return (int)(seconds * kFs / kBlock); }
+
+// Spectral centroid (Hz) over a frequency grid via Goertzel, on `n` samples.
+static double spectralCentroid(const float* x, int n, float f0, float f1, float step)
+{
+    double num = 0.0, den = 0.0;
+    for (float f = f0; f <= f1; f += step)
+    {
+        const double w = 2.0 * M_PI * f / kFs;
+        const double c = 2.0 * std::cos(w);
+        double s0 = 0, s1 = 0, s2 = 0;
+        for (int i = 0; i < n; ++i) { s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+        const double p = s1 * s1 + s2 * s2 - c * s1 * s2;
+        num += (double) f * p; den += p;
+    }
+    return num / (den + 1e-20);
+}
+
+// Render the death tail (SPEED off, hold TONE 0.6 s then release) into `out`.
+static void renderDeath(SirenEngine::Params base, std::vector<float>& out, float seconds)
+{
+    SirenEngine eng; eng.prepare(kFs, kBlock);
+    const int nb = (int)(seconds * kFs / kBlock);
+    float bufL[kBlock], bufR[kBlock]; float* bufs[2] = { bufL, bufR };
+    out.clear();
+    for (int b = 0; b < nb; ++b)
+    {
+        SirenEngine::Params p = base;
+        p.toneBtn = (b < blocksFor(0.6f));
+        eng.setParameters(p);
+        for (int i = 0; i < kBlock; ++i) { bufL[i] = 0.0f; bufR[i] = 0.0f; }
+        eng.process(bufs, 2, kBlock);
+        for (int i = 0; i < kBlock; ++i) out.push_back(bufL[i]);
+    }
+}
 
 int main()
 {
@@ -306,6 +341,25 @@ int main()
             for (int i = 0; i < kBlock; ++i) maxDiff = std::max(maxDiff, std::fabs(aL[i]-bL[i]));
         }
         CHECK(maxDiff == 0.0f, "classic default unchanged");
+    }
+
+    // 13. Warmth: the Physical collector model is darker than Classic during the
+    //     death (lower spectral centroid) — it rounds the edge / de-aliases
+    //     instead of emitting an idealized square. It does NOT add a vowel
+    //     formant (a first-order RC is roll-off, not resonance — see the design
+    //     doc Revision 2026-06-18).
+    {
+        SirenEngine::Params base; base.power = true; base.speed = 3;
+        base.tone = 1; base.discharge_s = 3.0f; base.oversample = 4;
+        std::vector<float> classic, physical;
+        base.model = 0; renderDeath(base, classic, 4.0f);
+        base.model = 1; renderDeath(base, physical, 4.0f);
+
+        const int N = 4096, st = (int)(1.5f * kFs);   // mid-descent
+        const double cc = spectralCentroid(classic.data()  + st, N, 80.f, 8000.f, 50.f);
+        const double cp = spectralCentroid(physical.data() + st, N, 80.f, 8000.f, 50.f);
+        std::printf("      death centroid: classic=%.0f physical=%.0f Hz\n", cc, cp);
+        CHECK(cp < cc * 0.97, "physical: warmer/darker than classic (collector roll-off)");
     }
 
     std::printf(failures == 0 ? "ALL OK\n" : "%d FAILURE(S)\n", failures);
